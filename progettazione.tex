@@ -1,0 +1,209 @@
+\section{Progettazione}
+
+\subsection{Package Diagram}
+Il Package Diagram rappresenta l’organizzazione modulare del sistema e 
+le dipendenze tra i principali sottosistemi.
+
+I package principali sono:
+
+\begin{itemize}
+    \item \textbf{Domain Model}: contiene le entità e le enumerazioni che 
+    modellano i concetti fondamentali del dominio (User, Group, Membership, 
+    Expense, Settlement, Balance). Questo layer incapsula la business logic
+    ed è indipendente dagli altri livelli. 
+    
+    Il Domain Model è stato a sua volta suddiviso in 3 sotto-package:
+    \begin{itemize}
+        \item \texttt{registry}: contiene le entità relative a utenti e gruppi
+        \item \texttt{accounting}: contiene le entità relative alla contabilità
+        \item \texttt{events}: contiene l'infrastruttura per il pattern Observer
+    \end{itemize}
+
+    \begin{figure} [ht]
+        \centering
+        \includegraphics[width=1\linewidth]{img/package_domain.png}
+        \caption{Suddivisione del Domain Model in sotto-package}
+    \end{figure}
+
+    \item \textbf{Data Access Layer (ORM)}: gestisce la persistenza dei dati tramite il pattern DAO, isolando il resto dell’applicazione dai dettagli di accesso al database.
+    
+    \item \textbf{Service Layer}: implementa i casi d’uso applicativi 
+    coordinando più entità di dominio e interagendo con i DAO. È responsabile della gestione delle transazioni e del wiring degli Observer.
+
+    \item \textbf{Controller Layer}: rappresenta il punto di accesso ai casi 
+    d’uso dal lato CLI. I controller validano le richieste e delegano la 
+    logica applicativa ai Service.
+
+    \item \textbf{Util}: contiene componenti di supporto riutilizzabili. 
+    Include \texttt{PasswordHasher}, utilizzato per la gestione 
+    delle password.
+
+    \begin{figure} [ht]
+        \centering
+        \includegraphics[width=1\linewidth]{img/packages.png}
+        \caption{Dipendenze tra i package Controller, Service, ORM e Util}
+    \end{figure}
+
+    \item \textbf{Exception}: raccoglie le eccezioni applicative 
+    personalizzate (\texttt{DomainException, DAOException, 
+    UnauthorizedException, EntityNotFoundException}), permettendo 
+    una gestione strutturata degli errori nei vari layer.
+
+    \begin{figure} [h]
+        \centering
+        \includegraphics[width=1\linewidth]{img/package_exceptions.png}
+        \caption{Exceptions Package}
+    \end{figure}
+   
+\end{itemize}
+
+Le dipendenze seguono una direzione controllata: i Controller dipendono dai Service, i Service dipendono da Domain e DAO, mentre il Domain Model non dipende dagli altri layer. Le eccezioni sono condivise tra i layer per rappresentare condizioni di errore applicativo.
+
+\subsection{Class Diagrams}
+In questa sezione viene illustrata la struttura delle classi, evidenziando le relazioni tra le entità e l'applicazione dei design pattern.
+\subsubsection{Domain Model}
+Il diagramma delle classi del Domain Model descrive la logica di business alla base dell'applicazione.
+Come si è accennato, le classi sono state suddivise in 3 sotto-package all'interno del package Domain Moddel:
+\begin{enumerate}
+    \item \textbf{Events (Pattern Observer)}
+    Questo package implementa il pattern Observer per gestire la propagazione dei cambiamenti di stato all'interno del Domain Model, assicurando che quando avviene un'azione (es. una spesa viene creata), le altre entità interessate (es. i saldi dei membri) vengano aggiornate automaticamente.
+    \begin{itemize}
+        \item \textbf{Subject (Classe Astratta)}: Definisce il contratto per le entità che possono generare eventi (come Group, Expense, Settlement). Gestisce una lista transient di observer e fornisce metodi per l'aggancio (attach) e la notifica (notifyObservers).
+        
+        \item \textbf{Observer (Interfaccia)}: Definita per le entità che devono reagire ai cambiamenti. Nel sistema, la classe Membership implementa questa interfaccia per aggiornare il proprio Balance in risposta agli eventi di dominio.
+        
+        \item \textbf{DomainEvent (Value Object)}: Incapsula i dettagli di un cambiamento di stato, inclusi l'identificativo della sorgente (sourceId), il timestamp, l'utente che ha scatenato l'azione (triggeredBy) e un payload flessibile sotto forma di mappa.
+        
+        \item \textbf{EventType (Enumeration)}: Cataloga in modo esaustivo gli eventi possibili, distinguendo tra operazioni amministrative (es. MEMBER\_JOINED), contabili (EXPENSE\_CREATED) e di conguaglio (SETTLEMENT\_CONFIRMED)
+    \end{itemize}
+
+    \item \textbf{Registry (Gestione Utenti e Gruppi)}
+    \begin{itemize}
+        \item \textbf{User (Entity)}: Rappresenta l'attore principale del sistema, identificato univocamente da email e dotato di logica per la verifica delle credenziali.
+        \item \textbf{Group (Entity, Subject)}: L'entità centrale che aggrega membri, spese e saldi. Gestisce i codici di invito e lo stato di attività.
+        Estende Subject per notificare modifiche alla sua struttura.
+        \item Membership (Entity, Observer): Classe associativa che lega un User e un Group. Definisce il ruolo (ADMIN, MEMBER) e lo stato (ACTIVE, WAITING\_ACCEPTANCE, REMOVED). Implementa Observer per ricalcolare i debiti/crediti ogni volta che una spesa viene aggiunta o modificata nel gruppo di appartenenza.
+    \end{itemize}
+    
+    \item \textbf{Accounting (Contabilità)}
+    \begin{itemize}
+        \item \textbf{Expense (Entity, Subject)}: Modella una spesa sostenuta da un membro (payer), include dettagli come l'importo (amount), la categoria e la data. Essendo un Subject, notifica gli osservatori (le Membership) affinché possano aggiornare i propri saldi netti.
+        \item \textbf{ExpenseParticipant(Entity)}: Definisce quanto ogni beneficiario deve per una specifica spesa. Esiste in una relazione di composizione con Expense.
+        \item \textbf{Balance(Entity)}: Ogni Membership ha un proprio Balance che traccia il debito/credito netto (netBalance) in tempo reale. Fornisce metodi per l'incremento o decremento del saldo e per la verifica dello stato di pareggio (isSettled).
+        \item \textbf{Settlement (Entity, Subject)}: Rappresenta un'operazione di rimborso tra due membri (payer e receiver) per azzerare un debito. Include una gestione degli stati tramite PaymentStatus (PENDING, COMPLETED, REJECTED).
+    \end{itemize}
+\end{enumerate}
+
+\begin{figure} [h]
+    \centering
+    \includegraphics[width=1\linewidth]{img/class_diagram_domain.png}
+    \caption{Domain Model Class Diagram}
+\end{figure}
+
+\paragraph{Relazioni e Vincoli di Integrità}
+Il diagramma evidenzia legami strutturali forti che guidano la persistenza e il ciclo di vita degli oggetti:
+\begin{itemize}
+    \item \textbf{Composizione}: Group esercita una composizione (1:N) su Membership, Expense e Settlement, indicando che queste entità non hanno ragione di esistere al di fuori del contesto del gruppo.
+    Ogni Membership ha esattamente un Balance associato. (1:1).
+    
+    \item \textbf{Associazioni}: Un User può avere più Membership (partecipare a più gruppi), mentre una Expense ha un singolo payer (Membership) ma molti participants. Le spese e i pareggi puntano a istanze di Membership per identificare gli attori finanziari coinvolti, garantendo l'integrità referenziale all'interno del database.
+\end{itemize}
+
+\subsubsection{ORM}
+Il diagramma delle classi dell’ORM descrive il livello di persistenza del sistema, responsabile della traduzione tra oggetti del Domain Model e dati memorizzati nel database relazionale.
+L'accesso ai dati è organizzato secondo il pattern Data Access Object (DAO), che incapsula i dettagli delle query SQL fornendo un'interfaccia orientata agli oggetti al Service Layer.
+
+\begin{figure}
+    \centering
+    \includegraphics[width=\linewidth]{img/class_diagram_orm.png}
+    \caption{ORM Class Diagram}
+\end{figure}
+
+\paragraph{Componenti principali:}
+\begin{enumerate}
+    \item \textbf{ConnectionManager}
+    
+    La gestione delle connessioni al database è modellata tramite la classe \texttt{ConnectionManager}, rappresentata come Singleton. Essa fornisce l’accesso alla connessione JDBC e i metodi per la gestione delle transazioni: \texttt{beginTransaction()}, \texttt{commit()} e \texttt{rollback()}.
+    
+    Tutte le classi DAO convergono verso il \texttt{ConnectionManager}, da cui ottengono l'oggetto \texttt{Connection} necessario per eseguire le operazioni di persistenza.
+
+    \item \textbf{Concrete DAOs}
+    
+    Per ciascuna entità principale del dominio è previsto un DAO dedicato (\texttt{UserDAO}, \texttt{GroupDAO}, \texttt{MembershipDAO}, \texttt{ExpenseDAO}, \texttt{BalanceDAO}, \texttt{SettlementDAO}). Ogni DAO espone metodi per il salvataggio, l'aggiornamento e il recupero delle entità. 
+    Come evidenziato nel diagramma, i DAO includono metodi specifici per il dominio, quali \texttt{findByInviteCode} in \texttt{GroupDAO }o \texttt{findByGroup} in \texttt{ExpenseDAO} per recuperare le spese di un contesto specifico.
+
+    I DAO hanno la responsabilità architetturale di istanziare gli oggetti del Domain Model (\texttt{User, Group,} ecc.), mappando i risultati delle query (\texttt{ResultSet}) in oggetti Java utilizzabili dai layer superiori.
+\end{enumerate}
+
+\paragraph{Gestione delle transazioni}
+Il controllo delle transazioni è delegato al \textbf{Service Layer}. I Service aprono una transazione tramite il \texttt{ConnectionManager}, coordinano l'esecuzione dei vari DAO e infine consolidano (commit) o annullano (rollback) l'intero blocco di modifiche.
+
+Questo approccio consente di eseguire in modo atomico operazioni che coinvolgono più entità. Ad esempio, la creazione di una nuova spesa richiede sia l’inserimento dell’\texttt{Expense} nel database, sia l’aggiornamento dei \texttt{Balance} di tutti i membri coinvolti; queste operazioni devono essere eseguite all'interno della stessa transazione per garantire la consistenza dei dati.
+
+\paragraph{Gestione delle eccezioni}
+I DAO intercettano le eccezioni di basso livello (SQLException) e le incapsulano in \texttt{DAOException}.  
+In questo modo i layer superiori rimangono indipendenti dai dettagli della tecnologia di persistenza e possono gestire gli errori a un livello più astratto.
+
+\subsubsection{Business Logic (Controller e Service Layer)}
+Il diagramma delle classi della Business Logic rappresenta i due livelli intermedi dell’architettura applicativa: \textbf{Controller Layer} e \textbf{Service Layer}.
+
+\begin{figure}
+    \centering
+    \includegraphics[width=\linewidth]{img/class_diagram_business_logic.png}
+    \caption{Business Logic Class Diagram}
+    \label{fig:businesslogicdiagram}
+\end{figure}
+
+\paragraph{Service Layer}
+
+Il Service Layer rappresenta il cuore funzionale dell'applicazione. 
+Le classi di questo package incapsulano i casi d'uso e orchestrano le operazioni, garantendo l'integrità dei dati e l'applicazione delle regole di dominio.
+
+\newpage
+\subsection{Database}
+
+\subsubsection{Modello ER}
+\begin{figure} [h]
+    \centering
+    \includegraphics[width=0.95\linewidth]{img/ER_diagram.png}
+    \caption{Modello ER}
+\end{figure}
+
+\newpage
+\subsubsection{Schema Relazionale}
+Dalla traduzione del modello ER si ottiene il seguente schema relazionale.
+Le chiavi primarie (PK) sono sottolineate, mentre le chiavi esterne (FK) mantengono il nome dell'attributo referenziato.
+
+\begin{flushleft}
+\textbf{User} (\underline{user\_id}, email, full\_name, password)
+\medskip
+
+\textbf{Group} (\underline{group\_id}, name, description, currency,
+invite\_code, invite\_code\_expiry\_date, creation\_date,
+created\_by\_user\_id, is\_active)
+\medskip
+
+\textbf{Membership} (\underline{membership\_id}, user\_id,
+group\_id, role, status)
+\medskip
+
+\textbf{Expense} (\underline{expense\_id}, group\_id,
+payer\_membership\_id, created\_by\_membership, amount,
+description, category, expense\_date, last\_modified\_date,
+is\_deleted)
+\medskip
+
+\textbf{ExpenseParticipant} (\underline{participant\_id},
+expense\_id, beneficiary\_membership\_id, share\_amount)
+\medskip
+
+\textbf{Balance} (\underline{balance\_id}, membership\_id,
+net\_balance, last\_updated)
+\medskip
+
+\textbf{Settlement} (\underline{settlement\_id}, group\_id,
+payer\_membership\_id, receiver\_membership\_id, amount,
+settlement\_date, status)
+
+\end{flushleft}
+

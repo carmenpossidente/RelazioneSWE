@@ -1,0 +1,77 @@
+\documentclass[a4paper,12pt]{article}
+\usepackage{graphicx}
+\usepackage[utf8]{inputenc}
+\usepackage[italian]{babel}
+\usepackage{amsmath}
+\usepackage{enumitem}   
+\usepackage{tabularx} 
+\usepackage{float}    
+\usepackage{booktabs} 
+\usepackage[hidelinks]{hyperref}
+\usepackage[official]{eurosym}
+\usepackage{microtype}
+
+
+\renewcommand{\arraystretch}{1.3}
+
+\begin{document}
+
+\begin{titlepage}
+\centering
+
+\includegraphics[width=0.5\textwidth]{img/logo_unifi_.pdf}\par
+\vspace{0.6cm}
+
+{\scshape\Large Università degli Studi di Firenze\par}
+\vspace{0.2cm}
+{\scshape\normalsize Dipartimento di Ingegneria dell'Informazione\par}
+
+\vspace{1.2cm}
+
+\rule{\textwidth}{0.5pt}
+%\vspace{0.1cm}
+
+{\Large\bfseries SplitManager\par}
+\vspace{0.15cm}
+{\normalsize Sistema software per la gestione delle spese condivise\par}
+
+%\vspace{0.1cm}
+\rule{\textwidth}{0.5pt}
+
+\vfill
+
+\begin{tabular*}{\textwidth}{l @{\extracolsep{\fill}} r}
+\textbf{Autori} & \textbf{Matricole} \\
+Carmen Possidente & 7115970 \\
+Matteo Gerlotti   & 7025024 \\
+Roberta Donato    & 7113502 \\
+\end{tabular*}
+
+\vspace{0.8cm}
+
+\begin{flushleft}
+\normalsize
+\textbf{Corso:} Ingegneria del Software\\
+\textbf{Docente:} Prof. Enrico Vicario
+\end{flushleft}
+\vspace{0.8cm}
+
+{\normalsize Anno Accademico 2025--2026\par}
+
+\end{titlepage}
+
+
+\tableofcontents
+\listoffigures
+
+\include{introduzione}
+\include{analisi_requisiti}
+\include{progettazione}
+\include{implementazione}
+\include{test}
+
+
+\end{document}
+
+
+

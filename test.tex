@@ -1,0 +1,71 @@
+\section{Test}
+Il sistema è stato testato seguendo il modello della \textbf{Test Pyramid}, coprendo tre livelli di granularità: Unit (White-Box), Integration (Grey-Box) e Functional (Black-Box).
+
+\subsection{Test Strutturali (White-Box)}
+Questo livello è alla base della piramide e verifica le classi del \textbf{Domain Model} in isolamento. I test verificano che le invarianti di classe siano rispettate e che la logica di business risponda correttamente, garantendo che ogni componente si auto-protegga da input non validi e mantenga uno stato consistente.
+
+Le principali suite di test implementate sono:
+\begin{itemize}
+    \item \textbf{\texttt{BalanceTest}:} verifica le invarianti della classe \texttt{Balance}, in particolare la corretta associazione a una membership valida (\texttt{membership != null}), la correttezza delle operazioni sui saldi, come \texttt{increment()} e \texttt{decrement()}, e la coerenza dello stato "settled".
+
+    \begin{figure}[ht]
+        \centering
+        \makebox[\textwidth][c]{\includegraphics[width=0.7\textwidth]{img/snippet_BT.png}}
+        \caption{Snippet 1 - BalanceTest }
+    \end{figure}
+
+    \item \textbf{\texttt{ExpenseTest}:} verifica validazioni sull'importo (\texttt{amount > 0}), le regole di autorizzazione che definiscono i permessi di modifica ed eliminazione delle spese e il meccanismo di soft delete (le spese non vengono fisicamente eliminate dal database, ma marcate come \texttt{isDeleted = true}).
+    \begin{figure}[ht]
+        \centering
+        \makebox[\textwidth][c]{\includegraphics[width=0.8\textwidth]{img/snippet_ET.png}}
+        \caption{Snippet 2 - ExpenseTest }
+    \end{figure}
+   
+    \item \textbf{\texttt{MembershipTest}:} verifica le invarianti legate allo stato delle membership e la loro relazione con il \texttt{Balance} associato. In particolare, viene testata la coerenza tra la presenza di debiti (\texttt{hasPendingDebts()}) e la possibilità di rimuovere un membro dal gruppo (\texttt{canBeRemoved()}) per garantire il corretto comportamento dello UC10.
+    \begin{figure}[ht]
+        \centering
+        \makebox[\textwidth][c]{\includegraphics[width=0.9\textwidth]{img/snippet_MT.png}}
+        \caption{Snippet 3 - MembershipTest }
+    \end{figure}
+    
+\end{itemize}
+    
+
+\subsection{Test di Integrazione (Grey-Box)}
+
+\subsection{Test Funzionali (Black-Box)}
+Questo livello verifica il comportamento del sistema dal punto di vista dell’utente, esercitando i casi d’uso attraverso il Controller layer utilizzato come API.
+
+È stata implementata una suite completa, \textbf{\texttt{E2ETest}}, che simula uno scenario di utilizzo tipico (dalla creazione del gruppo all'estinzione dei debiti) attraverso il caso di test \textbf{\texttt{testCompleteUserFlow}}.
+
+\subsubsection{Scenario di Test}
+
+Due utenti, Alice e Bob, utilizzano il sistema per gestire una spesa comune.
+\begin{enumerate}
+    \item Alice si registra al sistema e crea un nuovo gruppo "Vacation". Il sistema assegna automaticamente ad Alice il ruolo di \texttt{ADMIN} e genera un codice invito.
+    
+    \item Bob utilizza il codice invito generato da Alice per unirsi al gruppo. Inizialmente la sua membership è in stato \texttt{WAITING\_ACCEPTANCE}, finché Alice non lo approva.
+    
+    \item Alice registra una spesa di \EUR{100} per l'hotel, suddivisa equamente con Bob. Il sistema calcola automaticamente i saldi dei membri in base alla ripartizione della spesa.
+    
+    \item Bob crea un settlement per saldare il suo debito di \EUR{50} verso Alice. Il settlement parte in stato \texttt{PENDING} e richiede la conferma di Alice (in quanto ricevente del pagamento) per essere completato. Solo dopo la conferma i balance vengono aggiornati. Questo meccanismo di "doppia conferma" protegge entrambe le parti.
+    
+    \item Dopo la conferma del settlement, il sistema deve aver aggiornato i balance a zero per entrambi i membri e il gruppo deve risultare completamente saldato.
+\end{enumerate}
+
+\subsubsection{Aspetti Architetturali}
+
+Il test E2E è eseguito senza coinvolgere direttamente la CLI interattiva. Per consentire ciò è stato applicato il \textit{Dependency Inversion Principle}, facendo dipendere i controller dall’interfaccia \texttt{Navigator} anziché dall'implementazione concreta che gestisce i menu. 
+
+Questa architettura permette di iniettare nel test uno Stub di \texttt{Navigator} che intercetta le richieste di navigazione senza bloccare l'esecuzione in attesa di input da tastiera.
+In produzione, invece, viene utilizzato il \texttt{NavigationManager} standard che gestisce il flusso della CLI.
+
+In questo modo i casi d’uso possono essere testati automaticamente, 
+mantenendo la logica applicativa isolata dal layer di input/output su console.
+La CLI gestisce esclusivamente l’interazione con l’utente, delegando la logica applicativa ai Controller, mentre i test esercitano direttamente tali controller.
+
+\begin{figure}[ht]
+    \centering
+    \makebox[\textwidth][c]{\includegraphics[width=0.7\textwidth]{img/snippet_SN.png}}
+    \caption{Snippet 4 - StubNavigator }
+\end{figure}
