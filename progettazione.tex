@@ -61,9 +61,10 @@ Le dipendenze seguono una direzione controllata: i Controller dipendono dai Serv
 
 \subsection{Class Diagrams}
 In questa sezione viene illustrata la struttura delle classi, evidenziando le relazioni tra le entità e l'applicazione dei design pattern.
+
 \subsubsection{Domain Model}
 Il diagramma delle classi del Domain Model descrive la logica di business alla base dell'applicazione.
-Come si è accennato, le classi sono state suddivise in 3 sotto-package all'interno del package Domain Moddel:
+Come si è accennato, le classi sono state suddivise in 3 sotto-package all'interno del package Domain Model:
 \begin{enumerate}
     \item \textbf{Events (Pattern Observer)}
     Questo package implementa il pattern Observer per gestire la propagazione dei cambiamenti di stato all'interno del Domain Model, assicurando che quando avviene un'azione (es. una spesa viene creata), le altre entità interessate (es. i saldi dei membri) vengano aggiornate automaticamente.
@@ -80,16 +81,21 @@ Come si è accennato, le classi sono state suddivise in 3 sotto-package all'inte
     \item \textbf{Registry (Gestione Utenti e Gruppi)}
     \begin{itemize}
         \item \textbf{User (Entity)}: Rappresenta l'attore principale del sistema, identificato univocamente da email e dotato di logica per la verifica delle credenziali.
+        
         \item \textbf{Group (Entity, Subject)}: L'entità centrale che aggrega membri, spese e saldi. Gestisce i codici di invito e lo stato di attività.
         Estende Subject per notificare modifiche alla sua struttura.
+        
         \item Membership (Entity, Observer): Classe associativa che lega un User e un Group. Definisce il ruolo (ADMIN, MEMBER) e lo stato (ACTIVE, WAITING\_ACCEPTANCE, REMOVED). Implementa Observer per ricalcolare i debiti/crediti ogni volta che una spesa viene aggiunta o modificata nel gruppo di appartenenza.
     \end{itemize}
     
     \item \textbf{Accounting (Contabilità)}
     \begin{itemize}
         \item \textbf{Expense (Entity, Subject)}: Modella una spesa sostenuta da un membro (payer), include dettagli come l'importo (amount), la categoria e la data. Essendo un Subject, notifica gli osservatori (le Membership) affinché possano aggiornare i propri saldi netti.
-        \item \textbf{ExpenseParticipant(Entity)}: Definisce quanto ogni beneficiario deve per una specifica spesa. Esiste in una relazione di composizione con Expense.
-        \item \textbf{Balance(Entity)}: Ogni Membership ha un proprio Balance che traccia il debito/credito netto (netBalance) in tempo reale. Fornisce metodi per l'incremento o decremento del saldo e per la verifica dello stato di pareggio (isSettled).
+        
+        \item \textbf{ExpenseParticipant (Entity)}: Definisce quanto ogni beneficiario deve per una specifica spesa. Esiste in una relazione di composizione con Expense.
+        
+        \item \textbf{Balance (Entity)}: Ogni Membership ha un proprio Balance che traccia il debito/credito netto (netBalance) in tempo reale. Fornisce metodi per l'incremento o decremento del saldo e per la verifica dello stato di pareggio (isSettled).
+        
         \item \textbf{Settlement (Entity, Subject)}: Rappresenta un'operazione di rimborso tra due membri (payer e receiver) per azzerare un debito. Include una gestione degli stati tramite PaymentStatus (PENDING, COMPLETED, REJECTED).
     \end{itemize}
 \end{enumerate}
@@ -104,7 +110,7 @@ Come si è accennato, le classi sono state suddivise in 3 sotto-package all'inte
 Il diagramma evidenzia legami strutturali forti che guidano la persistenza e il ciclo di vita degli oggetti:
 \begin{itemize}
     \item \textbf{Composizione}: Group esercita una composizione (1:N) su Membership, Expense e Settlement, indicando che queste entità non hanno ragione di esistere al di fuori del contesto del gruppo.
-    Ogni Membership ha esattamente un Balance associato. (1:1).
+    Ogni Membership ha esattamente un Balance associato (1:1).
     
     \item \textbf{Associazioni}: Un User può avere più Membership (partecipare a più gruppi), mentre una Expense ha un singolo payer (Membership) ma molti participants. Le spese e i pareggi puntano a istanze di Membership per identificare gli attori finanziari coinvolti, garantendo l'integrità referenziale all'interno del database.
 \end{itemize}
@@ -124,7 +130,6 @@ L'accesso ai dati è organizzato secondo il pattern Data Access Object (DAO), ch
     \item \textbf{ConnectionManager}
     
     La gestione delle connessioni al database è modellata tramite la classe \texttt{ConnectionManager}, rappresentata come Singleton. Essa fornisce l’accesso alla connessione JDBC e i metodi per la gestione delle transazioni: \texttt{beginTransaction()}, \texttt{commit()} e \texttt{rollback()}.
-    
     Tutte le classi DAO convergono verso il \texttt{ConnectionManager}, da cui ottengono l'oggetto \texttt{Connection} necessario per eseguire le operazioni di persistenza.
 
     \item \textbf{Concrete DAOs}
@@ -144,22 +149,77 @@ Questo approccio consente di eseguire in modo atomico operazioni che coinvolgono
 I DAO intercettano le eccezioni di basso livello (SQLException) e le incapsulano in \texttt{DAOException}.  
 In questo modo i layer superiori rimangono indipendenti dai dettagli della tecnologia di persistenza e possono gestire gli errori a un livello più astratto.
 
-\subsubsection{Business Logic (Controller e Service Layer)}
-Il diagramma delle classi della Business Logic rappresenta i due livelli intermedi dell’architettura applicativa: \textbf{Controller Layer} e \textbf{Service Layer}.
 
 \begin{figure}
     \centering
-    \includegraphics[width=\linewidth]{img/class_diagram_business_logic.png}
-    \caption{Business Logic Class Diagram}
-    \label{fig:businesslogicdiagram}
+    \includegraphics[width=\linewidth]{img/class_diagram_service.png}
+    \caption{Service Layer Class Diagram}
+    \label{fig:servicediagram}
 \end{figure}
 
-\paragraph{Service Layer}
+\subsubsection{Service Layer}
+Il Service Layer rappresenta il nucleo funzionale dell’applicazione.
+Le classi di questo livello orchestrano interi casi d’uso coordinando entità di dominio e componenti di persistenza.
+Ogni classe di servizio rappresenta un’area funzionale ben definita del sistema:
+\begin{itemize}
+    \item \textbf{UserService}: gestisce registrazione, autenticazione e aggiornamento del profilo utente, utilizzando il \texttt{PasswordHasher} per la sicurezza delle credenziali.
+    \item \textbf{GroupService}: gestisce la creazione dei gruppi, la generazione dei codici invito, l’ingresso nei gruppi e le operazioni amministrative sui membri.
+    \item \textbf{ExpenseService}: coordina la creazione, modifica e cancellazione delle spese, assicurando la coerenza dei dati contabili.
+    \item \textbf{SettlementService}: gestisce i rimborsi tra membri e la loro conferma.
+    \item \textbf{BalanceService}: fornisce funzionalità di consultazione dei saldi e di ottimizzazione dei debiti.
+\end{itemize}   
 
-Il Service Layer rappresenta il cuore funzionale dell'applicazione. 
-Le classi di questo package incapsulano i casi d'uso e orchestrano le operazioni, garantendo l'integrità dei dati e l'applicazione delle regole di dominio.
+Oltre a coordinare operazioni che coinvolgono più entità e più DAO all'interno della stessa operazione logica, i Service sono responsabili della \textbf{gestione transazionale}:
+definiscono i confini delle transazioni atomiche interagendo con il \texttt{ConnectionManager} (commit/rollback).
 
-\newpage
+Il Service Layer è anche responsabile della gestione del ciclo di vita del pattern Observer previsto nel Domain Model. 
+Poiché le liste di Observer associate ai Subject (Expense, Settlement, Group) non vengono persistite nel database, prima di eseguire un'operazione che comporta un cambiamento di stato, 
+il Service Layer ricostruisce dinamicamente (\textbf{Wiring}) queste dipendenze a runtime per garantire il corretto funzionamento del meccanismo di notifica. 
+
+\paragraph{Applicazione dello Strategy Pattern per l'Ottimizzazione dei Debiti}
+Quando gli utenti registrano numerose spese incrociate, il sistema deve capire chi deve pagare chi, cercando di ridurre al minimo il numero di bonifici necessari per azzerare i debiti di tutti.
+Per risolvere questo problema, è stato implementato un algoritmo di ottimizzazione dei debiti all'interno del \texttt{BalanceService} che delega la complessa logica di calcolo a un componente esterno, 
+sfruttando il pattern comportamentale \textbf{Strategy}.
+Il pattern Strategy permette di separare "chi gestisce i dati" da "chi esegue i calcoli", strutturando la soluzione in tre elementi chiave:
+\begin{enumerate}
+    \item \textbf{Il Contesto (BalanceService)}: 
+    Agisce come un coordinatore, si occupa di recuperare i saldi aggiornati dal database e passarli all'algoritmo di calcolo, senza preoccuparsi di come questo funzioni internamente.
+
+    \item \textbf{L'Interfaccia (BalanceStrategy)}: 
+    Definisce il contratto standard di comunicazione, espone un unico metodo, optimize, che prende in input la mappa dei saldi dei membri \texttt{(Map<Membership, BigDecimal>)} e garantisce di restituire una lista di transazioni da effettuare \texttt{(List<Settlement>)}.
+
+    \item \textbf{La Strategia Concreta (MinTransactionsStrategy)}: 
+    È la classe che implementa fisicamente l'interfaccia e contiene il vero e proprio algoritmo matematico progettato per minimizzare gli scambi di denaro.
+
+\end{enumerate}
+Questa architettura garantisce elevata flessibilità e manutenibilità, rispettando il principio \textbf{Open/Closed} (Aperto alle estensioni, Chiuso alle modifiche),
+qualora in futuro si rendesse necessario introdurre un nuovo criterio per il calcolo dei rimborsi (ad esempio, un algoritmo che arrotonda le cifre per agevolare lo scambio di contanti), 
+sarà sufficiente sviluppare una nuova classe che implementi \texttt{BalanceStrategy}, lasciando invariato il codice del \texttt{BalanceService}.
+
+\begin{figure}
+    \centering
+    \includegraphics[width=\linewidth]{img/class_diagram_controller.png}
+    \caption{Controller Layer Class Diagram}
+    \label{fig:controllerdiagram}
+\end{figure}
+
+\subsubsection{Controller Layer}
+Il Controller Layer rappresenta il punto di accesso ai casi d’uso dal lato CLI. 
+I Controller (\texttt{AuthController}, \texttt{GroupController}, \texttt{ExpenseController}, \texttt{BalanceController}) non contengono business logic complessa, ma svolgono un ruolo di coordinamento tra interfaccia utente e service: 
+ricevono le richieste dell’utente, ne verificano la validità formale e delegano l’elaborazione ai servizi appropriati.
+
+Per supportare il funzionamento dei Controller, come illustrato in Figura \ref{fig:controllerdiagram}, il sistema include due componenti infrastrutturali modellati come Singleton, scelti per garantire un punto di accesso globale controllato:
+\begin{itemize}
+\item \textbf{\texttt{UserSession}}: gestisce il contesto e lo stato globale dell'applicazione. 
+Conserva i riferimenti all'utente attualmente autenticato (\texttt{currentUser}) e al gruppo selezionato (\texttt{currentGroup}). 
+Questo approccio centralizzato evita di dover passare continuamente questi parametri a ogni singola invocazione dei metodi del Controller o del Service.
+
+\item \textbf{\texttt{NavigationManager}}: implementa l'interfaccia \texttt{Navigator} e centralizza il flusso di transizione tra i menu della CLI. 
+Questa struttura applica il \textit{Dependency Inversion Principle}: i controller dipendono unicamente dall'astrazione e non dall'implementazione concreta, garantendo il totale disaccoppiamento della logica applicativa dall'input/output su console.
+Questo è fondamentale per consentire l'esecuzione isolata dei test automatizzati (questo aspetto verrà approfondito nella \textbf{Sezione \ref{sec:testing_e2e}}).
+\end{itemize}
+
+
 \subsection{Database}
 
 \subsubsection{Modello ER}
@@ -169,7 +229,7 @@ Le classi di questo package incapsulano i casi d'uso e orchestrano le operazioni
     \caption{Modello ER}
 \end{figure}
 
-\newpage
+
 \subsubsection{Schema Relazionale}
 Dalla traduzione del modello ER si ottiene il seguente schema relazionale.
 Le chiavi primarie (PK) sono sottolineate, mentre le chiavi esterne (FK) mantengono il nome dell'attributo referenziato.
