@@ -9,6 +9,144 @@ delle responsabilità tra i diversi livelli applicativi.
 \subsection{Data Access Layer}
 
 \subsection{Service Layer}
+Il Service Layer funge da collante tra la logica di business pura (Domain) e l'accesso ai dati (DAO).
+Di seguito si analizzano i dettagli implementativi più rilevanti di questo livello.
+
+\subsubsection{Gestione Delle Transazioni}
+Alla base della gestione transazionale c'è la classe Singleton \texttt{ConnectionManager} del livello DAO, 
+che gestisce l'unica connessione attiva verso il database H2 mettendo a disposizione i metodi \texttt{beginTransaction()}, 
+\texttt{commit()} e \texttt{rollback()}. 
+
+La responsabilità di invocare questi metodi spetta alle classi Service che, 
+essendo a conoscenza dell'intero caso d'uso, decidono i confini della transazione coordinando le chiamate a più DAO. 
+Per farlo in modo sicuro, il Service sfrutta l'istanza del \texttt{ConnectionManager} all'interno di un costrutto \texttt{try-catch}, 
+orchestrando così il \texttt{commit} in caso di successo o il \texttt{rollback} in caso di errore.
+
+Il flusso standard di una transazione gestita dal Service funziona in questo modo:
+\begin{enumerate}
+    \item Il Service ottiene la connessione dal \texttt{ConnectionManager} e invoca \texttt{beginTransaction()} prima di eseguire qualsiasi operazione che modifichi lo stato del database.
+    \item Il Service chiama i vari DAO necessari per compiere l'azione richiesta dall'utente.
+    \item Se tutte le operazioni sui DAO vanno a buon fine, il Service invoca \texttt{commit()} per rendere permanenti le modifiche. 
+    \item Se si verifica un'eccezione durante l'esecuzione delle operazioni sui DAO (ad esempio per errori SQL o vincoli violati), 
+    il Service cattura l'eccezione, invoca \texttt{rollback()} per annullare tutte le modifiche parziali e propaga l'errore incapsulandolo 
+    in una \texttt{DAOException}. Questo garantisce l'integrità dei dati e isola i livelli superiori dai dettagli infrastrutturali del database.  
+\end{enumerate}
+
+Nel seguente snippet, tratto da \texttt{ExpenseService}, è visibile la gestione transazionale durante la creazione di una nuova spesa:
+
+\begin{lstlisting}[language=Java, caption={Gestione della transazione nel metodo addExpense di ExpenseService}]
+ConnectionManager connMgr = ConnectionManager.getInstance();
+
+try {
+    connMgr.beginTransaction(); // Disabilita l'autocommit
+
+    // [Omissis: validazione e caricamento entita']
+
+    Expense expense = expenseDAO.create(
+        groupId, payerMembershipId, amount, 
+        description, category, participantIds
+    );
+
+    // [Omissis: Wiring degli Observer e chiamate a balanceDAO.update()]
+
+    connMgr.commit(); // Conferma le modifiche in blocco
+    return expense;
+
+} catch (Exception e) {
+    try {
+        connMgr.rollback(); // Annulla tutte le modifiche parziali
+    } catch (SQLException ex) {
+        throw new DAOException("Error during transaction rollback", ex);
+    }
+
+    if (e instanceof DomainException) {
+        throw (DomainException) e;
+    }
+    throw new DomainException("Error creating expense", e);
+}
+\end{lstlisting}
+
+
+
+
+\subsubsection{Wiring Dinamico degli Observer}
+Il pattern Observer viene utilizzato per fare in modo che determinati eventi aggiornino in automatico altre entità. 
+Le classi Group, Expense e Settlement fungono da \textbf{Subject}, mentre la classe Membership agisce come \textbf{Observer}.
+
+All'interno della classe astratta Subject, la lista degli Observer è dichiarata come \texttt{transient},
+ovvero non viene salvata all'interno del database. Di conseguenza, quando un'entità come una Expense 
+viene letta dal database, non sa chi siano i suoi Observer.
+È responsabilità esclusiva del Service Layer ricreare questi collegamenti al volo (operazione definita appunto "wiring").
+Dunque, quando deve eseguire un'operazione che scaturirà un evento (es./ creazione di una nuova spesa), 
+il Service esegue questi passaggi precisi:
+\begin{enumerate}
+    \item Interroga il database tramite i DAO per ottenere l'oggetto principale (ad esempio l'Expense).
+    \item Carica tutte le entità Observer correlate (tutte le Membership coinvolte).
+    \item Effettua il wiring, ovvero collega manualmente gli oggetti in memoria chiamando il metodo \texttt{attach()} sul Subject per ogni Observer trovato (es.\ texttt{expense.attach(membership})).
+    \item Esegue la modifica richiesta. A questo punto, il Subject invoca internamente \texttt{notifyObservers()}; le Membership collegate ricevono la notifica in tempo reale e aggiornano i propri saldi.
+    \item Una volta che gli Observer hanno aggiornato il loro stato in memoria, il Service utilizza i DAO appropriati (es./ BalanceDAO) per salvare le modifiche definitive sul database.
+\end{enumerate}
+
+\begin{lstlisting}[language=Java, caption={Implementazione del Wiring dinamico in ExpenseService}]
+// Carica tutti i membri del gruppo dal database
+List<Membership> allMembers = membershipDAO.findByGroup(groupId);
+
+for (Membership member : allMembers) {
+    expense.attach(member); // Effettua il Wiring
+}
+
+\end{lstlisting}
+\paragraph{Gestione della memoria (Request Scope)}
+Poiché il wiring viene effettuato dinamicamente, gli oggetti coinvolti hanno
+un ciclo di vita limitato alla singola operazione applicativa (\textit{Request Scope}).
+Il Service li carica dal database, li collega tramite \texttt{attach()},
+esegue l’operazione richiesta e non mantiene riferimenti persistenti oltre
+tale ambito, consentendo al sistema di liberarli automaticamente al termine
+dell’elaborazione, riducendo così il rischio di memory leak.
+
+
+
+\subsubsection{Ottimizzazione dei Debiti: Algoritmo Greedy}
+L'algoritmo di ottimizzazione incapsulato in \texttt{MinTransactionsStrategy} implementa un approccio \textbf{greedy}. 
+
+Il metodo \texttt{optimize()} riceve in ingresso la mappa dei saldi netti
+(\texttt{Map<Membership, BigDecimal>}) e suddivide i membri in due insiemi:
+\textbf{Debitors} (saldo negativo) e \textbf{Creditors} (saldo positivo),
+utilizzando una classe di supporto interna chiamata \texttt{DebtorCredit}.
+Le due liste vengono ordinate in ordine decrescente rispetto all'importo.
+Successivamente, un ciclo \texttt{while} effettua un matching greedy tra
+il debitore con debito maggiore e il creditore con credito maggiore,
+creando un nuovo oggetto \texttt{Settlement} per l'importo minimo tra i due saldi
+e aggiornando i residui fino all'azzeramento completo.
+
+\begin{lstlisting}[language=Java, caption={Nucleo del matching Greedy in MinTransactionsStrategy}]
+// Matching greedy (su liste precedentemente ordinate)
+int i = 0; // Indice debitori
+int j = 0; // Indice creditori
+
+while (i < debtors.size() && j < creditors.size()) {
+    DebtorCredit debtor = debtors.get(i);
+    DebtorCredit creditor = creditors.get(j);
+
+    // L'importo da trasferire e' il minimo tra debito e credito attuale
+    BigDecimal settleAmount = debtor.amount.min(creditor.amount);
+
+    // Registra la transazione da effettuare
+    settlements.add(new Settlement(
+        debtor.membership.getGroup(), debtor.membership, creditor.membership, settleAmount
+    ));
+
+    // Decurta l'importo appena saldato dai totali residui
+    debtor.amount = debtor.amount.subtract(settleAmount);
+    creditor.amount = creditor.amount.subtract(settleAmount);
+
+    // Se il debito o il credito e' azzerato, si avanza con l'indice
+    if (debtor.amount.compareTo(BigDecimal.ZERO) == 0) i++;
+    if (creditor.amount.compareTo(BigDecimal.ZERO) == 0) j++;
+}
+\end{lstlisting}
+
+Questa implementazione garantisce matematicamente che il numero di transazioni generate sia sempre al più $(N - 1)$, dove $(N)$ è il numero di membri coinvolti
 
 \subsection{Controller Layer e CLI}
 

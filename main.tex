@@ -10,6 +10,40 @@
 \usepackage[hidelinks]{hyperref}
 \usepackage[official]{eurosym}
 \usepackage{microtype}
+% --- PACCHETTI PER IL CODICE ---
+\usepackage{listings}
+\usepackage{xcolor}
+
+% Colori sobri per la sintassi
+\definecolor{ideblue}{RGB}{0,0,128}
+\definecolor{idegreen}{RGB}{63,127,95}
+\definecolor{idered}{RGB}{128,0,0}
+
+% Stile pulito: sfondo bianco e nessun contorno
+\lstdefinestyle{javastyle}{
+    backgroundcolor=\color{white},   % Sfondo bianco
+    commentstyle=\color{idegreen}\itshape,
+    keywordstyle=\color{ideblue}\bfseries,
+    numberstyle=\tiny\color{gray},
+    stringstyle=\color{idered},
+    basicstyle=\ttfamily\footnotesize,
+    breakatwhitespace=false,         
+    breaklines=true,                 
+    captionpos=b,                    
+    keepspaces=true,                 
+    numbers=left,                    % Numeri di riga a sinistra
+    numbersep=8pt,                  
+    showspaces=false,                
+    showstringspaces=false,
+    showtabs=false,                  
+    tabsize=4,
+    frame=none,                      % Nessun contorno
+    aboveskip=15pt,
+    belowskip=10pt
+}
+
+% Applica lo stile globalmente
+\lstset{style=javastyle}
 
 
 \renewcommand{\arraystretch}{1.3}

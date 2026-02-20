@@ -101,7 +101,7 @@ Come si è accennato, le classi sono state suddivise in 3 sotto-package all'inte
     \end{itemize}
 \end{enumerate}
 
-\begin{figure} [h]
+\begin{figure} [H]
     \centering
     \includegraphics[width=1\linewidth]{img/class_diagram_domain.png}
     \caption{Domain Model Class Diagram}
@@ -124,6 +124,7 @@ L'accesso ai dati è organizzato secondo il pattern Data Access Object (DAO), ch
     \centering
     \includegraphics[width=\linewidth]{img/class_diagram_orm.png}
     \caption{ORM Class Diagram}
+    \label{fig:classdiagramORM}
 \end{figure}
 
 \paragraph{Componenti principali:}
@@ -136,27 +137,15 @@ L'accesso ai dati è organizzato secondo il pattern Data Access Object (DAO), ch
     \item \textbf{Concrete DAOs}
     
     Per ciascuna entità principale del dominio è previsto un DAO dedicato (\texttt{UserDAO}, \texttt{GroupDAO}, \texttt{MembershipDAO}, \texttt{ExpenseDAO}, \texttt{BalanceDAO}, \texttt{SettlementDAO}). Ogni DAO espone metodi per il salvataggio, l'aggiornamento e il recupero delle entità. 
-    Come evidenziato nel diagramma, i DAO includono metodi specifici per il dominio, quali \texttt{findByInviteCode} in \texttt{GroupDAO }o \texttt{findByGroup} in \texttt{ExpenseDAO} per recuperare le spese di un contesto specifico.
+    Come evidenziato nel diagramma (Figura \ref{fig:classdiagramORM}), i DAO includono metodi specifici per il dominio, quali \texttt{findByInviteCode} in \texttt{GroupDAO }o \texttt{findByGroup} in \texttt{ExpenseDAO} per recuperare le spese di un contesto specifico.
 
     I DAO hanno la responsabilità architetturale di istanziare gli oggetti del Domain Model (\texttt{User, Group,} ecc.), mappando i risultati delle query (\texttt{ResultSet}) in oggetti Java utilizzabili dai layer superiori.
 \end{enumerate}
-
-\paragraph{Gestione delle transazioni}
-Il controllo delle transazioni è delegato al \textbf{Service Layer}. I Service aprono una transazione tramite il \texttt{ConnectionManager}, coordinano l'esecuzione dei vari DAO e infine consolidano (commit) o annullano (rollback) l'intero blocco di modifiche.
-
-Questo approccio consente di eseguire in modo atomico operazioni che coinvolgono più entità. Ad esempio, la creazione di una nuova spesa richiede sia l’inserimento dell’\texttt{Expense} nel database, sia l’aggiornamento dei \texttt{Balance} di tutti i membri coinvolti; queste operazioni devono essere eseguite all'interno della stessa transazione per garantire la consistenza dei dati.
 
 \paragraph{Gestione delle eccezioni}
 I DAO intercettano le eccezioni di basso livello (SQLException) e le incapsulano in \texttt{DAOException}.  
 In questo modo i layer superiori rimangono indipendenti dai dettagli della tecnologia di persistenza e possono gestire gli errori a un livello più astratto.
 
-
-\begin{figure}
-    \centering
-    \includegraphics[width=\linewidth]{img/class_diagram_service.png}
-    \caption{Service Layer Class Diagram}
-    \label{fig:servicediagram}
-\end{figure}
 
 \subsubsection{Service Layer}
 Il Service Layer rappresenta il nucleo funzionale dell’applicazione.
@@ -170,12 +159,24 @@ Ogni classe di servizio rappresenta un’area funzionale ben definita del sistem
     \item \textbf{BalanceService}: fornisce funzionalità di consultazione dei saldi e di ottimizzazione dei debiti.
 \end{itemize}   
 
-Oltre a coordinare operazioni che coinvolgono più entità e più DAO all'interno della stessa operazione logica, i Service sono responsabili della \textbf{gestione transazionale}:
-definiscono i confini delle transazioni atomiche interagendo con il \texttt{ConnectionManager} (commit/rollback).
+Oltre a coordinare operazioni che coinvolgono più entità e più DAO all'interno della stessa operazione logica, 
+al Service Layer sono assegnate due responsabilità architetturali fondamentali:
 
-Il Service Layer è anche responsabile della gestione del ciclo di vita del pattern Observer previsto nel Domain Model. 
-Poiché le liste di Observer associate ai Subject (Expense, Settlement, Group) non vengono persistite nel database, prima di eseguire un'operazione che comporta un cambiamento di stato, 
-il Service Layer ricostruisce dinamicamente (\textbf{Wiring}) queste dipendenze a runtime per garantire il corretto funzionamento del meccanismo di notifica. 
+\textbf{1. Gestione transazionale:} I Service definiscono i confini delle transazioni atomiche interagendo con il 
+\texttt{ConnectionManager}, garantiscono che operazioni che coinvolgono scritture multiple su diversi DAO vengano 
+confermate (commit) o annullate (rollback) in blocco, preservando l'integrità del database.
+
+\textbf{2. Ciclo di vita degli Observer:} Poiché le liste di Observer associate ai Subject (Expense, Settlement, Group)
+non vengono persistite nel database, prima di eseguire un'operazione che comporta un cambiamento di stato, 
+il Service Layer ricostruisce dinamicamente (\textbf{wiring}) queste dipendenze a runtime caricando i membri interessati e 
+agganciandoli al Subject.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\linewidth]{img/class_diagram_service.png}
+    \caption{Service Layer Class Diagram}
+    \label{fig:servicediagram}
+\end{figure}
 
 \paragraph{Applicazione dello Strategy Pattern per l'Ottimizzazione dei Debiti}
 Quando gli utenti registrano numerose spese incrociate, il sistema deve capire chi deve pagare chi, cercando di ridurre al minimo il numero di bonifici necessari per azzerare i debiti di tutti.
@@ -193,11 +194,13 @@ Il pattern Strategy permette di separare "chi gestisce i dati" da "chi esegue i 
     È la classe che implementa fisicamente l'interfaccia e contiene il vero e proprio algoritmo matematico progettato per minimizzare gli scambi di denaro.
 
 \end{enumerate}
-Questa architettura garantisce elevata flessibilità e manutenibilità, rispettando il principio \textbf{Open/Closed} (Aperto alle estensioni, Chiuso alle modifiche),
-qualora in futuro si rendesse necessario introdurre un nuovo criterio per il calcolo dei rimborsi (ad esempio, un algoritmo che arrotonda le cifre per agevolare lo scambio di contanti), 
-sarà sufficiente sviluppare una nuova classe che implementi \texttt{BalanceStrategy}, lasciando invariato il codice del \texttt{BalanceService}.
+Questa architettura rispetta il principio \textbf{Open/Closed}:
+qualora in futuro si rendesse necessario introdurre un nuovo criterio per il calcolo dei rimborsi 
+(ad esempio, un algoritmo che arrotonda le cifre per agevolare lo scambio di contanti), 
+sarà sufficiente sviluppare una nuova classe che implementi \texttt{BalanceStrategy}, 
+lasciando invariato il codice del \texttt{BalanceService}.
 
-\begin{figure}
+\begin{figure}[H]
     \centering
     \includegraphics[width=\linewidth]{img/class_diagram_controller.png}
     \caption{Controller Layer Class Diagram}
@@ -235,7 +238,7 @@ nel diagramma delle classi.
     \caption{Modello ER}
 \end{figure}
 
-
+\newpage
 \subsubsection{Schema Relazionale}
 Dalla traduzione del modello ER si ottiene il seguente schema relazionale.
 Le chiavi primarie (PK) sono sottolineate, mentre le chiavi esterne (FK) mantengono il nome dell'attributo referenziato.
