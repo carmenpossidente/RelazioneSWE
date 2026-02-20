@@ -1,15 +1,42 @@
 \section{Analisi dei Requisiti}
+Questa sezione descrive i requisiti funzionali del sistema attraverso modelli UML 
+e artefatti di supporto alla progettazione. Tutti i diagrammi presenti in questa 
+sezione e nella successiva sono stati realizzati con \textbf{Lucidchart}, mentre 
+i mockup sono stati realizzati con il supporto dell'intelligenza artificiale generativa.
 
 \subsection{Use Case Diagram}
+I seguenti diagrammi rappresentano i tre attori del sistema (User, Member, Admin) 
+e le principali funzionalità offerte dall'applicazione per ciascun ruolo.
 
-\begin{figure}[ht]
+\begin{figure}[H]
     \centering
-    \makebox[\textwidth][c]{\includegraphics[width=1.1\textwidth]{img/use_case_diagram.png}}
-    \caption{Use Case Diagram}
-    \label{fig:use_case_diagram}
+    \makebox[\textwidth][c]{\includegraphics[width=0.7\textwidth]{img/user_ucdiagram.png}}
+    \caption{Use Case Diagram - User}
+    \label{fig:use_case_diagram_user}
 \end{figure}
 
+\begin{figure}[H]
+    \centering
+    \makebox[\textwidth][c]{\includegraphics[width=0.7\textwidth]{img/member_ucdiagram.png}}
+    \caption{Use Case Diagram - Member}
+    \label{fig:use_case_diagram_member}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \makebox[\textwidth][c]{\includegraphics[width=0.7\textwidth]{img/admin_ucdiagram.png}}
+    \caption{Use Case Diagram - Admin}
+    \label{fig:use_case_diagram_admin}
+\end{figure}
+
+\newpage
 \subsection{Use Case Templates}
+Per ciascun caso d’uso identificato nel diagramma precedente,
+sono stati definiti i relativi template descrittivi.
+Ogni template specifica attore, pre-condizioni, flusso principale
+e flussi alternativi, fornendo una descrizione strutturata
+del comportamento atteso del sistema.
+
 
 % --- UC1: Sign Up ---
 \begin{table}[htbp]
@@ -25,7 +52,7 @@
         \hline
         \textbf{Pre-condizioni} & L'utente non deve essere già registrato nel sistema. \\
         \hline
-        \textbf{Basic Course} & 
+        \textbf{Basic Flow} & 
         \begin{enumerate}[leftmargin=*, nosep, topsep=3pt]
             \item L'utente accede alla pagina iniziale di SplitManager.
             \item Clicca su ``Sign up''.
@@ -42,7 +69,7 @@
             \item Il sistema mostra un messaggio di conferma e reindirizza alla pagina di login (Test \#1).
         \end{enumerate} \\
         \hline
-        \textbf{Alternative Course} & 
+        \textbf{Alternative Flow} & 
         \begin{enumerate}[label=5\alph*., leftmargin=*, nosep, topsep=3pt]
             \item Se l'email è già registrata, il sistema mostra un messaggio di errore ``Account already exists''.
             \item Se i campi obbligatori non sono compilati o le password non coincidono, il sistema richiede la correzione.
@@ -67,7 +94,7 @@
         \hline
         \textbf{Pre-condizioni} & L'utente deve essere già registrato nel sistema. \\
         \hline
-        \textbf{Basic Course} & 
+        \textbf{Basic Flow} & 
         \begin{enumerate}[leftmargin=*, nosep, topsep=3pt]
             \item L'utente accede alla pagina ``Login''.
             \item Inserisce le proprie credenziali (email e password).
@@ -76,7 +103,7 @@
             \item Se valide, il sistema apre la Home Page utente, dove può creare o unirsi a gruppi.
         \end{enumerate} \\
         \hline
-        \textbf{Alternative Course} & 
+        \textbf{Alternative Flow} & 
         \begin{enumerate}[label=4\alph*., leftmargin=*, nosep, topsep=3pt]
             \item Se l'email o la password non sono corrette, il sistema mostra un messaggio ``Invalid credentials'' e permette un nuovo tentativo.
             \item Se l'utente dimentica la password, può cliccare su ``Forgot password?'' per avviare la procedura di recupero.
@@ -101,7 +128,7 @@
         \hline
         \textbf{Pre-condizioni} & L'utente deve essere autenticato (logged in). \\
         \hline
-        \textbf{Basic Course} & 
+        \textbf{Basic Flow} & 
         \begin{enumerate}[leftmargin=*, nosep, topsep=3pt]
             \item L'utente accede alla dashboard personale (\hyperref[fig:dashboard]{\textbf{vedi Mockup \#1}}).
             \item Clicca su ``Create New Group''.
@@ -116,7 +143,7 @@
             \item Il sistema registra il nuovo gruppo, imposta l'utente come Admin, e apre la pagina del gruppo creato.
         \end{enumerate} \\
         \hline
-        \textbf{Alternative Course} & 
+        \textbf{Alternative Flow} & 
         \begin{enumerate}[label=5\alph*., leftmargin=*, nosep, topsep=3pt]
             \item Se mancano dati obbligatori (es.\ nome gruppo), il sistema mostra un messaggio di errore ``Please complete all required fields''.
             \item Se si verifica un errore di rete o salvataggio, viene mostrato ``Group creation failed. Try again later.''
@@ -141,7 +168,7 @@
         \hline
         \textbf{Pre-condizioni} & L'utente deve avere un account valido ed essere loggato. Deve aver ricevuto un link o un codice invito generato da un Admin. \\
         \hline
-        \textbf{Basic Course} & 
+        \textbf{Basic Flow} & 
         \begin{enumerate}[leftmargin=*, nosep, topsep=3pt]
             \item L'utente accede alla sezione ``Join Group'' dalla Dashboard (\hyperref[fig:dashboard]{\textbf{vedi Mockup \#1}}).
             \item Inserisce il codice di invito oppure clicca direttamente sul link ricevuto.
@@ -150,7 +177,7 @@
             \item Il sistema mostra un messaggio di conferma e reindirizza alla pagina del gruppo (\hyperref[fig:group_details]{\textbf{vedi Mockup \#2}}).
         \end{enumerate} \\
         \hline
-        \textbf{Alternative Course} & 
+        \textbf{Alternative Flow} & 
         \begin{enumerate}[label=3\alph*., leftmargin=*, nosep, topsep=3pt]
             \item Se il codice è errato o scaduto, il sistema mostra ``Invalid or expired invitation''.
             \item Se l'utente è già membro del gruppo, il sistema mostra ``You are already part of this group''.
@@ -175,7 +202,7 @@
         \hline
         \textbf{Pre-condizioni} & Il membro deve appartenere ad almeno un gruppo. \\
         \hline
-        \textbf{Basic Course} & 
+        \textbf{Basic Flow} & 
         \begin{enumerate}[leftmargin=*, nosep, topsep=3pt]
             \item Il membro accede alla pagina del gruppo.
             \item Clicca sul pulsante ``Add Expense'' in alto a destra.
@@ -192,7 +219,7 @@
             \item Il sistema registra la nuova spesa, aggiorna i saldi e chiude il modale tornando alla pagina del gruppo.
         \end{enumerate} \\
         \hline
-        \textbf{Alternative Course} & 
+        \textbf{Alternative Flow} & 
         \begin{enumerate}[label=4\alph*., leftmargin=*, nosep, topsep=3pt]
             \item Se l'importo non è valido o i campi obbligatori sono vuoti, il sistema mostra un messaggio di errore.
         \end{enumerate}
@@ -219,7 +246,7 @@
         \hline
         \textbf{Pre-condizioni} & Il membro deve appartenere ad almeno un gruppo. \\
         \hline
-        \textbf{Basic Course} & 
+        \textbf{Basic Flow} & 
         \begin{enumerate}[leftmargin=*, nosep, topsep=3pt]
             \item Il membro accede alla pagina del gruppo.
             \item Seleziona la sezione ``Balances'' (\hyperref[fig:balances]{\textbf{vedi Mockup \#4}}).
@@ -232,7 +259,7 @@
             \item Il membro può visualizzare i dettagli delle transazioni passate.
         \end{enumerate} \\
         \hline
-        \textbf{Alternative Course} & 
+        \textbf{Alternative Flow} & 
         \begin{enumerate}[label=3\alph*., leftmargin=*, nosep, topsep=3pt]
             \item Se non ci sono spese registrate, il sistema mostra ``No expenses yet''.
         \end{enumerate} \\
@@ -256,7 +283,7 @@
         \hline
         \textbf{Pre-condizioni} & Il membro appartiene ad un gruppo con almeno una spesa registrata. \\
         \hline
-        \textbf{Basic Course} & 
+        \textbf{Basic Flow} & 
         \begin{enumerate}[leftmargin=*, nosep, topsep=3pt]
             \item Il membro accede alla sezione ``Expense History'' del gruppo.
             \item Il sistema mostra una lista cronologica delle spese con:
@@ -270,7 +297,7 @@
             \item Il membro può filtrare o cercare spese specifiche per categoria, data o membro.
         \end{enumerate} \\
         \hline
-        \textbf{Alternative Course} & 
+        \textbf{Alternative Flow} & 
         \begin{enumerate}[label=2\alph*., leftmargin=*, nosep, topsep=3pt]
             \item Se non ci sono spese nel periodo selezionato, il sistema mostra ``No expenses found''.
         \end{enumerate} \\
@@ -294,7 +321,7 @@
         \hline
         \textbf{Pre-condizioni} & Il membro ha un debito aperto verso un altro membro del gruppo. \\
         \hline
-        \textbf{Basic Course} & 
+        \textbf{Basic Flow} & 
         \begin{enumerate}[leftmargin=*, nosep, topsep=3pt]
             \item Il membro accede alla sezione ``Balances'' (\hyperref[fig:balances]{\textbf{vedi Mockup \#4}}).
             \item Seleziona il debito da saldare.
@@ -303,7 +330,7 @@
             \item Il sistema registra il pagamento e aggiorna immediatamente i saldi mostrati nella pagina.
         \end{enumerate} \\
         \hline
-        \textbf{Alternative Course} & 
+        \textbf{Alternative Flow} & 
         \begin{enumerate}[label=4\alph*., leftmargin=*, nosep, topsep=3pt]
             \item Se il membro annulla l'operazione, il sistema chiude la richiesta senza registrare il pagamento.
         \end{enumerate} \\
@@ -327,7 +354,7 @@
         \hline
         \textbf{Pre-condizioni} & L'Admin è autenticato e si trova nella pagina del gruppo. \\
         \hline
-        \textbf{Basic Course} & 
+        \textbf{Basic Flow} & 
         \begin{enumerate}[leftmargin=*, nosep, topsep=3pt]
             \item L'Admin accede alla sezione ``Members Page'' del gruppo.
             \item Seleziona l'opzione ``Invite a new member''.
@@ -338,7 +365,7 @@
             \item L'Admin riceve la notifica di nuova richiesta e potrà successivamente approvarla (vedi UC10).
         \end{enumerate} \\
         \hline
-        \textbf{Alternative Course} & 
+        \textbf{Alternative Flow} & 
         \begin{enumerate}[label=2\alph*., leftmargin=*, nosep, topsep=3pt]
             \item Se esiste già un invito attivo per lo stesso utente, il sistema non genera un nuovo codice e mostra il messaggio ``The invitation has already been sent'' (Test \#).
         \end{enumerate}
@@ -365,7 +392,7 @@
         \hline
         \textbf{Pre-condizioni} & L'Admin è autenticato. Esiste almeno un gruppo attivo con uno o più membri. \\
         \hline
-        \textbf{Basic Course} & 
+        \textbf{Basic Flow} & 
         \begin{enumerate}[leftmargin=*, nosep, topsep=3pt]
             \item L'Admin apre la sezione ``Members Page''.
             \item Il sistema mostra l'elenco dei membri con stato (``Active''/``Waiting'') e saldo corrente.
@@ -379,7 +406,7 @@
             \item L'Admin riceve conferma delle modifiche effettuate.
         \end{enumerate} \\
         \hline
-        \textbf{Alternative Course} & 
+        \textbf{Alternative Flow} & 
         \begin{enumerate}[label=3\alph*., leftmargin=*, nosep, topsep=3pt]
             \item Se l'Admin tenta di rimuovere un membro con debiti aperti, il sistema blocca l'operazione e mostra il messaggio ``The member cannot be removed'' (Test \#).
             \item L'approvazione non va a buon fine per link scaduto: il sistema notifica errore ``The invitation is no longer valid'' (Test \#).
@@ -404,7 +431,7 @@
         \hline
         \textbf{Pre-condizioni} & Esiste almeno una spesa registrata. \\
         \hline
-        \textbf{Basic Course} & 
+        \textbf{Basic Flow} & 
         \begin{enumerate}[leftmargin=*, nosep, topsep=3pt]
             \item L'Admin accede alla sezione ``Expense page''.
             \item Seleziona la spesa da modificare o eliminare.
@@ -413,7 +440,7 @@
             \item Il sistema notifica tutti i membri del gruppo.
         \end{enumerate} \\
         \hline
-        \textbf{Alternative Course} & 
+        \textbf{Alternative Flow} & 
         \begin{enumerate}[label=2\alph*., leftmargin=*, nosep, topsep=3pt]
             \item Tentativo di modifica su spesa già saldata: il sistema mostra un messaggio di blocco.
             \item L'Admin annulla l'operazione: nessuna modifica viene salvata.
@@ -438,7 +465,7 @@
         \hline
         \textbf{Pre-condizioni} & L'Admin è autenticato e ha creato il gruppo. \\
         \hline
-        \textbf{Basic Course} & 
+        \textbf{Basic Flow} & 
         \begin{enumerate}[leftmargin=*, nosep, topsep=3pt]
             \item L'Admin apre la sezione ``Group settings''.
             \item Visualizza le attuali impostazioni (nome, descrizione, valuta, regole).
@@ -455,7 +482,7 @@
             \item Il sistema salva le nuove impostazioni e le applica ai futuri calcoli di saldo.
         \end{enumerate} \\
         \hline
-        \textbf{Alternative Course} & 
+        \textbf{Alternative Flow} & 
         \begin{enumerate}[label=3\alph*., leftmargin=*, nosep, topsep=3pt]
             \item Errore di validazione (es.\ valuta non supportata).
             \item L'Admin annulla l'operazione: nessuna modifica viene applicata.
@@ -468,6 +495,9 @@
 
 \clearpage
 \subsection{Mockups}
+I mockup, generati con \textbf{Figma}, illustrano una possibile rappresentazione grafica 
+dell’interfaccia utente, coerente con i requisiti funzionali definiti. 
+
 
 % MOCKUP #1: DASHBOARD
 \begin{figure}[htbp]
@@ -507,8 +537,17 @@
     \label{fig:balances}
 \end{figure}
 
-\clearpage
 \subsection{Page Navigation Diagram}
+Il diagramma di navigazione descrive il flusso tra le diverse
+pagine dell’applicazione, evidenziando le transizioni possibili
+in base alle azioni dell’utente. 
+
+Come evidenziato nel diagramma (\textbf{Figura \ref{fig:pagenavigationdiagram}}), alcune pagine e azioni, 
+come la gestione delle impostazioni di gruppo, la modifica/eliminazione delle spese e la gestione dei membri o inviti, 
+sono riservate \textbf{solo} agli amministratori del gruppo.
+Questa restrizione visiva e funzionale garantisce che le operazioni critiche o potenzialmente distruttive non siano esposte ai membri standard, 
+migliorando la sicurezza e prevenendo azioni accidentali.
+
 
 \begin{figure}[htbp]
     \centering

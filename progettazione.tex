@@ -9,8 +9,9 @@ I package principali sono:
 \begin{itemize}
     \item \textbf{Domain Model}: contiene le entità e le enumerazioni che 
     modellano i concetti fondamentali del dominio (User, Group, Membership, 
-    Expense, Settlement, Balance). Questo layer incapsula la business logic
-    ed è indipendente dagli altri livelli. 
+    Expense, Settlement, Balance). Questo livello definisce i comportamenti 
+    propri delle entità e le regole che ne governano lo stato, rimanendo 
+    indipendente dagli altri livelli applicativi.
     
     Il Domain Model è stato a sua volta suddiviso in 3 sotto-package:
     \begin{itemize}
@@ -221,6 +222,11 @@ Questo è fondamentale per consentire l'esecuzione isolata dei test automatizzat
 
 
 \subsection{Database}
+La progettazione del database è stata effettuata in continuità
+con il Domain Model, garantendo allineamento tra entità software
+e strutture relazionali. Le relazioni, le cardinalità e i vincoli
+di integrità presenti nel modello ER riflettono quelli definiti
+nel diagramma delle classi.
 
 \subsubsection{Modello ER}
 \begin{figure} [h]
