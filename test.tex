@@ -8,25 +8,50 @@ Le principali suite di test implementate sono:
 \begin{itemize}
     \item \textbf{\texttt{BalanceTest}:} verifica le invarianti della classe \texttt{Balance}, in particolare la corretta associazione a una membership valida (\texttt{membership != null}), la correttezza delle operazioni sui saldi, come \texttt{increment()} e \texttt{decrement()}, e la coerenza dello stato "settled".
 
-    \begin{figure}[ht]
-        \centering
-        \makebox[\textwidth][c]{\includegraphics[width=0.7\textwidth]{img/snippet_BT.png}}
-        \caption{Snippet 1 - BalanceTest }
-    \end{figure}
+\begin{lstlisting}[language=Java, caption={Test della logica di pareggio del saldo}]
+void settle_resetsToZero_andIsSettled() {
+    Balance b = new Balance(null, memberA);
+    b.increment(new BigDecimal("9.99"));
+    assertFalse(b.isSettled());
+    
+    b.settle();
+    
+    assertTrue(b.isSettled());
+    assertEquals(BigDecimal.ZERO.setScale(2), b.getAmount());
+}
+\end{lstlisting}
 
     \item \textbf{\texttt{ExpenseTest}:} verifica validazioni sull'importo (\texttt{amount > 0}), le regole di autorizzazione che definiscono i permessi di modifica ed eliminazione delle spese e il meccanismo di soft delete (le spese non vengono fisicamente eliminate dal database, ma marcate come \texttt{isDeleted = true}).
-    \begin{figure}[ht]
-        \centering
-        \makebox[\textwidth][c]{\includegraphics[width=0.8\textwidth]{img/snippet_ET.png}}
-        \caption{Snippet 2 - ExpenseTest }
-    \end{figure}
+    
+\begin{lstlisting}[language=Java, caption={Test del costruttore con importo negativo}]
+void testConstructor_WithNegativeAmount_ThrowsException() {
+    assertThrows(
+        DomainException.class,
+        () -> new Expense(
+            1L, group, creator, creator,
+            new BigDecimal("-100.00"), 
+            "Invalid Expense",
+            Category.FOOD,
+            LocalDateTime.now()
+        )
+    );
+}
+    \end{lstlisting}
    
     \item \textbf{\texttt{MembershipTest}:} verifica le invarianti legate allo stato delle membership e la loro relazione con il \texttt{Balance} associato. In particolare, viene testata la coerenza tra la presenza di debiti (\texttt{hasPendingDebts()}) e la possibilità di rimuovere un membro dal gruppo (\texttt{canBeRemoved()}) per garantire il corretto comportamento dello UC10.
-    \begin{figure}[ht]
-        \centering
-        \makebox[\textwidth][c]{\includegraphics[width=0.9\textwidth]{img/snippet_MT.png}}
-        \caption{Snippet 3 - MembershipTest }
-    \end{figure}
+
+\begin{lstlisting}[language=Java, caption={Test della logica di rimozione di una Membership con debiti pendenti}]
+void canBeRemoved_reflectsPendingDebts() {
+    Membership m = new Membership(null, userOther, group, Role.MEMBER);
+    assertTrue(m.canBeRemoved()); 
+
+    Balance b = new Balance(null, m);
+    b.increment(new BigDecimal("1.00")); 
+    m.setBalance(b);
+
+    assertFalse(m.canBeRemoved()); 
+}
+\end{lstlisting}
     
 \end{itemize}
     
@@ -65,8 +90,47 @@ In questo modo i casi d’uso possono essere testati automaticamente,
 mantenendo la logica applicativa isolata dal layer di input/output su console.
 La CLI gestisce esclusivamente l’interazione con l’utente, delegando la logica applicativa ai Controller, mentre i test esercitano direttamente tali controller.
 
-\begin{figure}[ht]
-    \centering
-    \makebox[\textwidth][c]{\includegraphics[width=0.7\textwidth]{img/snippet_SN.png}}
-    \caption{Snippet 4 - StubNavigator }
-\end{figure}
+\begin{lstlisting}[language=Java, caption={Implementazione di uno Stub per l'interfaccia Navigator a scopi di test}]
+static class StubNavigator implements Navigator {
+    public boolean hasError = false;
+    public String lastMessage = "";
+    public String currentPage = "NONE";
+
+    @Override
+    public void showSuccess(String message) {
+        this.lastMessage = message;
+        this.hasError = false;
+    }
+
+    @Override
+    public void showError(String message) {
+        this.lastMessage = message;
+        this.hasError = true;
+    }
+
+    @Override
+    public boolean showConfirmation(String message) {
+        return true;
+    }
+
+    @Override
+    public void navigateToLogin() {
+        this.currentPage = "LOGIN";
+    }
+
+    @Override
+    public void navigateToRegister() {
+        this.currentPage = "REGISTER";
+    }
+
+    @Override
+    public void navigateToHome() {
+        this.currentPage = "HOME";
+    }
+
+    @Override
+    public void navigateToGroupDetails(Group group) {
+        this.currentPage = "GROUP_DETAILS";
+    }
+}
+\end{lstlisting}
