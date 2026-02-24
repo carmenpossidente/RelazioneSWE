@@ -74,7 +74,7 @@ La conseguenza pratica è che ogni entità \texttt{Subject} (\texttt{Group},
 \texttt{Expense}, \texttt{Settlement}) viene restituita dal DAO con la lista degli
 observer vuota. Il Service Layer si fa carico di ricollegare gli observer prima di
 invocare qualsiasi operazione che generi eventi, attraverso la procedura di wiring
-descritta nella Sezione~4.3.2.
+descritta nella Sezione~\ref{sec:service_wiring}.
 
 La classe \texttt{Subject} adotta inoltre una misura difensiva nella notifica:
 \texttt{notifyObservers()} opera su una copia della lista per evitare
@@ -466,9 +466,8 @@ try {
 \end{lstlisting}
 
 
-
-
 \subsubsection{Wiring Dinamico degli Observer}
+\label{sec:service_wiring}
 Il pattern Observer viene utilizzato per fare in modo che determinati eventi aggiornino in automatico altre entità. 
 Le classi Group, Expense e Settlement fungono da \textbf{Subject}, mentre la classe Membership agisce come \textbf{Observer}.
 
@@ -493,6 +492,7 @@ List<Membership> allMembers = membershipDAO.findByGroup(groupId);
 for (Membership member : allMembers) {
     expense.attach(member); // Effettua il Wiring
 }
+
 
 \end{lstlisting}
 \paragraph{Gestione della memoria (Request Scope)}
@@ -547,5 +547,143 @@ while (i < debtors.size() && j < creditors.size()) {
 
 Questa implementazione garantisce matematicamente che il numero di transazioni generate sia sempre al più $(N - 1)$, dove $(N)$ è il numero di membri coinvolti
 
+
 \subsection{Controller Layer e CLI}
 
+Il Controller Layer costituisce il punto di ingresso della logica applicativa, 
+ricevendo gli input dall'interfaccia utente e coordinando le chiamate ai Service. 
+Il sistema utilizza una \textbf{Command Line Interface (CLI)} come Presentation Layer.
+
+L'architettura adottata separa nettamente questi due livelli, garantendo che:
+\begin{itemize}
+    \item I Controller contengano esclusivamente logica di coordinamento, 
+    delegando ai Service le operazioni di business.
+    \item La CLI gestisca solo aspetti di presentazione (menu, input/output), 
+    senza conoscere dettagli implementativi dei Service o del Domain.
+\end{itemize}
+
+\subsubsection{Dependency Injection nei Controller}
+
+Tutti i Controller ricevono le proprie dipendenze (Service, Session, Navigator) 
+tramite costruttore, applicando il principio di \textbf{Dependency Injection}. 
+Questo approccio offre numerosi vantaggi in termini di testabilità ed esplicitezza, 
+garantendo inoltre l'immutabilità dello stato (le dipendenze sono dichiarate 
+\texttt{final}):
+
+\begin{lstlisting}[language=Java, caption={Dependency Injection nel costruttore di AuthController}]
+public class AuthController {
+    private final UserService userService;
+    private final UserSession session;
+    private final Navigator navigator;
+
+    public AuthController(UserService userService, 
+                          UserSession session, 
+                          Navigator navigator) {
+        if (userService == null || session == null || navigator == null) {
+            throw new IllegalArgumentException("Dependencies cannot be null");
+        }
+        this.userService = userService;
+        this.session = session;
+        this.navigator = navigator;
+    }
+    // ... logica di coordinamento ...
+}
+\end{lstlisting}
+
+Nel codice sopra, \texttt{AuthController} riceve tre dipendenze tramite costruttore:
+\begin{itemize}
+    \item \texttt{UserService}: per eseguire operazioni di autenticazione.
+    \item \texttt{UserSession}: per mantenere lo stato della sessione corrente.
+    \item \texttt{Navigator}: per gestire navigazione e feedback utente.
+\end{itemize}
+
+Il costruttore valida che nessuna dipendenza sia \texttt{null}, 
+garantendo che il Controller sia sempre in uno stato consistente.
+
+\subsubsection{Gestione dello Stato: UserSession Singleton}
+
+Il mantenimento dello stato dell'utente autenticato è affidato alla classe 
+\texttt{UserSession}, implementata seguendo il pattern creazionale \textbf{Singleton}. 
+Questa specifica architettura prevede un costruttore privato, che impedisce la creazione 
+diretta di istanze esterne tramite la keyword \texttt{new}. 
+
+L'istanza unica viene invece allocata in memoria solo al primo accesso effettivo 
+tramite il metodo \texttt{getInstance()}, sfruttando il meccanismo della \textit{lazy initialization} 
+per ottimizzare il consumo di risorse. 
+Tale approccio garantisce l'esistenza di un'unica istanza globale condivisa per 
+l'intera esecuzione del programma: ciò permette ai vari Controller di accedere in 
+qualsiasi momento ai dati dell'utente loggato e del gruppo correntemente selezionato, 
+eliminando la necessità di propagare continuamente questi oggetti attraverso le firme 
+dei metodi. 
+
+Infine, la classe espone metodi di utility dedicati, come \texttt{isLoggedIn()} e 
+\texttt{hasGroupSelected()}, che semplificano notevolmente i controlli condizionali 
+all'interno dei layer superiori.
+
+\begin{lstlisting}[language=Java, caption={Lazy initialization nel Singleton UserSession}]
+public class UserSession {
+    private static UserSession instance;
+    private User currentUser;
+    // ... altri campi ...
+
+    private UserSession() {} // Costruttore privato
+
+    public static UserSession getInstance() {
+        if (instance == null) {
+            instance = new UserSession(); // Istanziazione ritardata (Lazy)
+        }
+        return instance;
+    }
+    // ... getter e setter ...
+}
+\end{lstlisting}
+
+\subsubsection{Dependency Inversion Principle (DIP)}
+
+Per mantenere la logica applicativa isolata dal layer di input/output su console, 
+il design applica rigorosamente il \textbf{Dependency Inversion Principle (DIP)}. 
+
+Anziché far dipendere i Controller dall'implementazione concreta che gestisce i menu, 
+li si fa dipendere dall'interfaccia astratta \texttt{Navigator}. 
+In produzione, l'entry-point dell'applicazione inietta nei Controller il \texttt{NavigationManager} 
+standard, che gestisce concretamente il flusso della CLI e le stampe a schermo. 
+
+Oltre a favorire la modularità, questa scelta architetturale è stata pensata primariamente 
+per abilitare la testabilità automatizzata del sistema. 
+Disaccoppiando l'I/O, è infatti possibile iniettare nei Controller un componente fittizio 
+(\texttt{StubNavigator}) che sopprime l'output e non blocca il thread in attesa di input 
+da tastiera. L'implementazione e l'utilizzo pratico di questo Stub durante i test 
+End-to-End sono approfonditi nella Sezione~\ref{sec:test2e2_architettura}.
+
+\subsubsection{Architettura della Presentation (CLI)}
+
+La modularità e la robustezza del livello di presentazione (CLI) sono garantite da 
+due scelte implementative chiave che azzerano la duplicazione del codice:
+\begin{itemize}
+    \item \textbf{InputHandler centralizzato}: Una classe di utilità che incapsula l'uso di \texttt{java.util.Scanner}. 
+    Si occupa di validare superficialmente gli input (controllando formati numerici, stringhe vuote, ecc.) 
+    e implementa logiche di \textit{retry} automatico in caso di inserimento errato. 
+    In questo modo i Controller ricevono sempre dati "puliti" e correttamente tipizzati.
+    \item \textbf{Struttura Gerarchica dei Menu}: Il flusso applicativo è orchestrato da un coordinatore principale 
+    (\texttt{CLIMenu}) che agisce da router verso sottomenu specializzati (\texttt{AuthMenu}, \texttt{GroupMenu}, \texttt{ExpenseMenu}, ecc.). 
+    Ciascun sottomenu riceve l'\texttt{InputHandler} e le istanze dei Controller necessari, garantendo alta coesione e rispetto del principio di singola responsabilità (SRP).
+\end{itemize}
+
+\begin{lstlisting}[language=Java, caption={Esempio di logica di retry automatico nell'InputHandler}]
+public BigDecimal readAmount(String prompt) {
+    while (true) { // Loop di retry
+        try {
+            System.out.print(prompt);
+            String input = scanner.nextLine().trim();
+            BigDecimal amount = new BigDecimal(input);
+            
+            if (amount.compareTo(BigDecimal.ZERO) > 0) {
+                return amount; // Input valido, esce dal loop
+            }
+            System.out.println("[ERROR] L'importo deve essere positivo.");
+        } catch (NumberFormatException e) {
+            System.out.println("[ERROR] Formato non valido. Inserisci un numero.");
+        }
+    }
+}
+\end{lstlisting}

@@ -80,15 +80,22 @@ Due utenti, Alice e Bob, utilizzano il sistema per gestire una spesa comune.
 \end{enumerate}
 
 \subsubsection{Aspetti Architetturali}
+\label{sec:test2e2_architettura}
 
-Il test E2E è eseguito senza coinvolgere direttamente la CLI interattiva. Per consentire ciò è stato applicato il \textit{Dependency Inversion Principle}, facendo dipendere i controller dall’interfaccia \texttt{Navigator} anziché dall'implementazione concreta che gestisce i menu. 
+Come anticipato durante l'analisi del Controller Layer, i test End-to-End (E2E) 
+vengono eseguiti in modalità \textit{headless}, ovvero senza coinvolgere direttamente 
+la CLI interattiva. 
 
-Questa architettura permette di iniettare nel test uno Stub di \texttt{Navigator} che intercetta le richieste di navigazione senza bloccare l'esecuzione in attesa di input da tastiera.
-In produzione, invece, viene utilizzato il \texttt{NavigationManager} standard che gestisce il flusso della CLI.
+Sfruttando il disaccoppiamento nativo dell'architettura, l'infrastruttura di test 
+sostituisce il gestore reale dei menu con uno Stub dedicato, chiamato \texttt{StubNavigator}. 
+Questo componente fittizio, iniettato nei Controller al momento del setup, 
+implementa l'interfaccia \texttt{Navigator} ma ne neutralizza il comportamento bloccante: 
+invece di stampare a video e attendere input dall'utente, intercetta le chiamate 
+di navigazione e registra semplicemente il proprio stato interno.
 
-In questo modo i casi d’uso possono essere testati automaticamente, 
-mantenendo la logica applicativa isolata dal layer di input/output su console.
-La CLI gestisce esclusivamente l’interazione con l’utente, delegando la logica applicativa ai Controller, mentre i test esercitano direttamente tali controller.
+Questo approccio permette di esercitare e validare automaticamente l'intero flusso 
+dei casi d'uso, mantenendo la logica applicativa isolata dal layer di input/output su console.
+Di seguito è riportata l'implementazione essenziale dello Stub utilizzato:
 
 \begin{lstlisting}[language=Java, caption={Implementazione Stub per l'interfaccia Navigator}]
 static class StubNavigator implements Navigator {
