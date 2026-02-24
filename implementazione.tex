@@ -5,8 +5,407 @@ definite in fase di progettazione, con l’obiettivo di mantenere una chiara sep
 delle responsabilità tra i diversi livelli applicativi.
 
 \subsection{Domain Model}
+Il Domain Model è stato implementato in Java ponendo particolare attenzione
+alla protezione delle invarianti di classe, all'uso corretto dei tipi per i dati
+monetari e all'integrazione con il pattern Observer tramite una lista di observer
+non persistita.
+
+\subsubsection{Protezione delle invarianti nei costruttori}
+
+Ogni entità del dominio valida i propri invarianti direttamente nel costruttore,
+rendendo impossibile la creazione di oggetti in uno stato inconsistente. La
+filosofia adottata è quella del \textit{fail-fast}: se i dati forniti violano le regole di
+business, viene lanciata immediatamente un'eccezione prima che l'oggetto
+venga allocato.
+
+La classe \texttt{User} verifica che email, nome e hash della password non siano
+nulli o vuoti tramite controlli espliciti; \texttt{Membership} richiede che 
+\texttt{user}, \texttt{group} e \texttt{role} siano tutti non-null, sempre tramite 
+controlli espliciti; \texttt{Group} lancia \texttt{IllegalArgumentException} se nome o valuta sono
+assenti. L'invariante più critica si trova in \texttt{Balance}: il campo
+\texttt{membership} è dichiarato \texttt{final} e protetto con \texttt{Objects.requireNonNull()},
+rendendo strutturalmente impossibile avere un saldo orfano. Il campo
+\texttt{netBalance} viene inizializzato a zero con scala fissa a due cifre decimali,
+garantendo la consistenza monetaria fin dalla costruzione:
+
+\begin{lstlisting}[language=Java, caption={Invarianti del costruttore di Balance}]
+public Balance(Long balanceId, Membership membership) {
+    this.balanceId = balanceId;
+    this.membership = Objects.requireNonNull(membership);
+    this.netBalance = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+    this.lastUpdated = LocalDateTime.now();
+}
+\end{lstlisting}
+
+In \texttt{Expense}, la validazione dell'importo è incapsulata nel metodo privato
+\texttt{setAmount()}, che viene invocato sia nel costruttore sia in
+\texttt{modifyDetails()}: in questo modo la regola è espressa in un unico punto
+e non può essere aggirata nemmeno durante un aggiornamento successivo.
+Analogamente, \texttt{Settlement} verifica nel costruttore che \texttt{payer} e
+\texttt{receiver} siano membri distinti, proteggendo il sistema da auto-pagamenti:
+
+\begin{lstlisting}[language=Java, caption={Validazione singola di importo in Expense e verifica di identita in Settlement}]
+// In Expense: metodo privato richiamato nel costruttore e in modifyDetails()
+private void setAmount(BigDecimal amount) {
+    if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+        throw new DomainException("Amount must be positive.");
+    }
+    this.amount = amount;
+}
+
+// In Settlement: controllo di identita' nel costruttore
+if (payer.equals(receiver)) {
+    throw new IllegalArgumentException("Payer and receiver must be different");
+}
+\end{lstlisting}
+
+\subsubsection{Lista di Observer non persistita e wiring a runtime}
+
+La classe astratta \texttt{Subject} mantiene la lista degli Observer come campo
+d'istanza ordinario, senza alcuna marcatura speciale nel codice Java. L'assenza
+di persistenza di questo campo è una conseguenza architettonica deliberata: il
+Data Access Layer ricostruisce le entità a partire dai dati relazionali, e nessuna
+query SQL carica relazioni di tipo Observer. La lista è pertanto
+\textit{logicamente transient}, una caratteristica architetturale che prescinde dall'uso della
+keyword \texttt{transient} di Java, la quale non è necessaria in assenza di
+serializzazione.
+
+La conseguenza pratica è che ogni entità \texttt{Subject} (\texttt{Group},
+\texttt{Expense}, \texttt{Settlement}) viene restituita dal DAO con la lista degli
+observer vuota. Il Service Layer si fa carico di ricollegare gli observer prima di
+invocare qualsiasi operazione che generi eventi, attraverso la procedura di wiring
+descritta nella Sezione~4.3.2.
+
+La classe \texttt{Subject} adotta inoltre una misura difensiva nella notifica:
+\texttt{notifyObservers()} opera su una copia della lista per evitare
+eccezioni di tipo \texttt{ConcurrentModificationException} nel caso in cui 
+un observer modificasse la lista durante la propagazione dell'evento:
+
+\begin{lstlisting}[language=Java, caption={Notifica sicura degli observer in Subject}]
+protected void notifyObservers(DomainEvent event) {
+    if (event == null) return;
+    List<Observer> observersCopy = new ArrayList<>(observers);
+    for (Observer observer : observersCopy) {
+        try {
+            observer.onDomainEvent(event);
+        } catch (Exception e) {
+            // Continua con gli altri observer
+        }
+    }
+}
+\end{lstlisting}
+
+\subsubsection{Soft delete in Expense}
+
+La cancellazione delle spese è implementata come \textit{soft delete}: il metodo
+\texttt{markAsDeleted(Membership deletedBy)} imposta il flag booleano
+\texttt{isDeleted = true} sull'oggetto e aggiorna \texttt{lastModifiedDate}, senza
+rimuovere alcuna riga dal database. Questo approccio preserva la storia contabile
+del gruppo e consente di tracciare chi ha eliminato la spesa e quando.
+
+Prima di procedere, il metodo verifica l'autorizzazione tramite
+\texttt{canBeDeletedBy()}: solo l'admin del gruppo o chi ha creato la spesa può
+eliminarla. Se la spesa è già stata eliminata, viene sollevata una
+\texttt{IllegalStateException} per evitare cancellazioni doppie. Successivamente
+viene generato e propagato un \texttt{DomainEvent} di tipo
+\texttt{EXPENSE\_DELETED} agli Observer collegati; la notifica raggiunge le
+\texttt{Membership} agganciate, che la utilizzano per simulare l'invio di una
+comunicazione all'utente tramite logging. Le rettifiche contabili sui
+\texttt{Balance} sono invece gestite transazionalmente dal Service Layer, che
+dopo la notifica aggiorna i saldi tramite \texttt{BalanceDAO}.
+
+\begin{lstlisting}[language=Java, caption={Soft delete in Expense}]
+public void markAsDeleted(Membership deletedBy) {
+    if (!canBeDeletedBy(deletedBy)) {
+        throw new UnauthorizedException(
+            "Only admin or creator can delete the expense");
+    }
+    if (isDeleted) {
+        throw new IllegalStateException("Expense already deleted");
+    }
+    this.isDeleted = true;
+    touch(); // aggiorna lastModifiedDate
+    notifyObservers(createEvent(
+        EventType.EXPENSE_DELETED,
+        deletedBy,
+        Map.of("amount", amount, "description", description)
+    ));
+}
+\end{lstlisting}
+
+A livello di persistenza, il metodo \texttt{findByGroup()} in \texttt{ExpenseDAO}
+filtra automaticamente le spese eliminate attraverso la clausola
+\texttt{WHERE is\_deleted = FALSE}, rendendo la cancellazione logica trasparente
+per i layer superiori senza alcun intervento aggiuntivo del Service Layer.
+
+\subsubsection{Uso di BigDecimal per i calcoli monetari}
+
+Tutti i campi e le operazioni che coinvolgono importi monetari utilizzano
+\texttt{java.math.BigDecimal} invece di \texttt{double} o \texttt{float}. La scelta
+è motivata dalla necessità di evitare gli errori di rappresentazione in virgola
+mobile tipici dei tipi primitivi: una somma come \texttt{0.1 + 0.2} in
+\texttt{double} produce \texttt{0.30000000000000004}, un risultato inaccettabile in
+contesti finanziari.
+
+\texttt{BigDecimal} garantisce precisione decimale arbitraria e operazioni di
+arrotondamento configurabili. Nel sistema, il modo di arrotondamento standard
+adottato è \texttt{RoundingMode.HALF\_UP} con scala fissa a 2 cifre decimali.
+Questo arrotondamento è applicato sistematicamente nei metodi \texttt{increment()},
+\texttt{decrement()} e \texttt{apply()} di \texttt{Balance}, come mostra il seguente
+estratto:
+
+\begin{lstlisting}[language=Java, caption={Arrotondamento sistematico in Balance.increment() e decrement()}]
+public void increment(BigDecimal amount) {
+    validateAmount(amount);
+    netBalance = netBalance.add(amount).setScale(2, RoundingMode.HALF_UP);
+    touch();
+}
+
+public void decrement(BigDecimal amount) {
+    validateAmount(amount);
+    netBalance = netBalance.subtract(amount).setScale(2, RoundingMode.HALF_UP);
+    touch();
+}
+\end{lstlisting}
+
+Il medesimo criterio si applica nel calcolo della quota per partecipante in
+\texttt{ExpenseDAO.create()}, dove si usa \texttt{BigDecimal.divide()} con scala e
+\texttt{RoundingMode} espliciti, e nella classe \texttt{MinTransactionsStrategy},
+dove il confronto tra importi viene effettuato sempre con \texttt{compareTo()}
+invece dell'operatore \texttt{==}, rispettando la semantica di \texttt{BigDecimal}.
 
 \subsection{Data Access Layer}
+Il Data Access Layer gestisce la persistenza del sistema attraverso il pattern
+DAO (Data Access Object). Ogni classe DAO incapsula le query SQL relative a
+una specifica entità di dominio, esponendo al Service Layer un'interfaccia
+orientata agli oggetti che nasconde completamente i dettagli del database
+relazionale sottostante.
+
+\subsubsection{ConnectionManager: Singleton e gestione della connessione JDBC}
+
+La classe \texttt{ConnectionManager} è implementata come Singleton con
+inizializzazione \textit{eager}: l'istanza unica viene creata al momento del
+caricamento della classe tramite un campo \texttt{static final}, garantendo
+thread-safety senza necessità di sincronizzazione esplicita.
+
+\begin{lstlisting}[language=Java, caption={Singleton con inizializzazione eager in ConnectionManager}]
+public class ConnectionManager {
+
+    private static final ConnectionManager INSTANCE = new ConnectionManager();
+    private Connection connection;
+
+    private ConnectionManager() {
+        try {
+            connection = DriverManager.getConnection(
+                "jdbc:h2:mem:splitmanager;DB_CLOSE_DELAY=-1;"
+                + "INIT=RUNSCRIPT FROM 'classpath:schema.sql'",
+                "sa", ""
+            );
+            connection.setAutoCommit(false);
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to connect to database", e);
+        }
+    }
+
+    public Connection getConnection() { return connection; }
+
+    public static ConnectionManager getInstance() { return INSTANCE; }
+
+    public void beginTransaction() throws SQLException {
+        connection.setAutoCommit(false);
+    }
+    public void commit() throws SQLException {
+        connection.commit();
+        connection.setAutoCommit(true);
+    }
+    public void rollback() throws SQLException {
+        connection.rollback();
+        connection.setAutoCommit(true);
+    }
+}
+\end{lstlisting}
+
+La connessione è diretta a un database H2 in-memory, scelto per semplicità di
+setup e velocità di esecuzione nei test. Il parametro \texttt{DB\_CLOSE\_DELAY=-1}
+mantiene il database attivo per tutta la durata del processo JVM. L'autocommit
+è disabilitato fin dal costruttore, cosicché ogni operazione si colloca di default
+in una transazione controllata dal Service Layer. I metodi
+\texttt{beginTransaction()}, \texttt{commit()} e \texttt{rollback()} permettono al
+Service di gestire i confini transazionali senza accedere direttamente all'oggetto
+\texttt{Connection}.
+
+Tutti i DAO ottengono la connessione chiamando 
+\texttt{getInstance().getConnection()} sul Singleton 
+\texttt{ConnectionManager}, garantendo che l'intera
+applicazione condivida un unico oggetto \texttt{Connection} e che tutte le
+operazioni eseguite nell'ambito di un caso d'uso siano parte della stessa
+transazione.
+
+\subsubsection{Struttura comune dei DAO e mapping ResultSet -- entità}
+
+Ogni DAO segue una struttura uniforme composta da tre responsabilità principali:
+le operazioni CRUD, la costruzione delle query SQL tramite
+\texttt{PreparedStatement}, e il mapping dei risultati da \texttt{ResultSet} a
+oggetti di dominio.
+
+Il mapping è centralizzato in un metodo privato \texttt{mapResultSetToX()} per
+ciascun DAO, che ricostruisce l'oggetto di dominio leggendo le colonne del
+\texttt{ResultSet} per nome. Questo approccio isola il codice di conversione in un
+unico punto, facilitando la manutenzione in caso di modifiche allo schema.
+
+Per le entità con relazioni, come \texttt{Membership} che aggrega \texttt{User} e
+\texttt{Group}, il DAO utilizza JOIN nella query SQL ed esegue il mapping annidato
+all'interno dello stesso metodo, ricostruendo l'oggetto completo in un'unica
+passata sul \texttt{ResultSet}. Il metodo \texttt{mapResultSetToMembership()} in
+\texttt{MembershipDAO} illustra la complessità tipica di questo mapping: costruisce
+prima un oggetto \texttt{User} e un oggetto \texttt{Group} a partire dalle colonne
+della JOIN, gestisce la conversione del campo nullable
+\texttt{invite\_code\_expiry\_date} da \texttt{Timestamp} a \texttt{LocalDateTime},
+converte il ruolo da stringa a enum tramite \texttt{Role.valueOf()}, e infine
+assembla la \texttt{Membership} impostando lo stato corretto:
+
+\begin{lstlisting}[language=Java, caption={Mapping annidato in MembershipDAO.mapResultSetToMembership()}]
+private Membership mapResultSetToMembership(ResultSet rs) throws SQLException {
+    User user = new User(
+        rs.getLong("user_id"),
+        rs.getString("email"),
+        rs.getString("full_name"),
+        rs.getString("password_hash")
+    );
+
+    Group group = new Group(
+        rs.getLong("group_id"),
+        rs.getString("name"),
+        rs.getString("currency")
+    );
+    group.setDescription(rs.getString("description"));
+    group.setInviteCode(rs.getString("invite_code"));
+
+    // Conversione nullable Timestamp -> LocalDateTime
+    Timestamp expiry = rs.getTimestamp("invite_code_expiry_date");
+    if (expiry != null) {
+        group.setInviteCodeExpiry(expiry.toLocalDateTime());
+    }
+    group.setActive(rs.getBoolean("is_active"));
+
+    Membership membership = new Membership(
+        rs.getLong("membership_id"),
+        user,
+        group,
+        Role.valueOf(rs.getString("role"))
+    );
+
+    MembershipStatus status = MembershipStatus.valueOf(rs.getString("status"));
+    membership.changeStatus(status);
+
+    return membership;
+}
+\end{lstlisting}
+
+Le operazioni di inserimento recuperano la chiave primaria autogenerata dal
+database tramite \texttt{Statement.RETURN\_GENERATED\_KEYS} e
+\texttt{stmt.getGeneratedKeys()}, assegnandola all'oggetto di dominio prima di
+restituirlo al chiamante. In questo modo il Service Layer riceve sempre oggetti
+completamente identificati senza dover eseguire una query aggiuntiva.
+
+Infine, il \texttt{BalanceDAO} adotta un pattern di \textit{self-contained mapping}:
+invece di dipendere da \texttt{MembershipDAO} per ricostruire le
+\texttt{Membership} associate ai saldi (il che creerebbe una dipendenza circolare),
+replica localmente il codice di mapping necessario. La duplicazione è consapevole
+e documentata, ed è preferita rispetto all'introduzione di un ciclo di dipendenze
+tra DAO.
+
+\subsubsection{Gestione SQLException e traduzione in DAOException}
+
+Ogni metodo DAO avvolge le proprie operazioni SQL in un blocco
+\texttt{try-catch} che intercetta le eccezioni \texttt{SQLException} di basso
+livello e le converte in \texttt{DAOException}, un'eccezione unchecked definita nel
+package \texttt{exception}. Questa traduzione ha una funzione architetturale
+precisa: isola il Service Layer dai dettagli dell'infrastruttura di persistenza,
+consentendogli di gestire gli errori a un livello di astrazione più alto senza dover
+conoscere i codici di errore JDBC o le eccezioni checked di \texttt{java.sql}.
+Inoltre, la \texttt{SQLException} originale viene passata al costruttore della 
+\texttt{DAOException} come causa, preservando così la traccia dello stack 
+dell'errore originario.
+
+Il metodo \texttt{save()} di \texttt{UserDAO} illustra il pattern: la chiamata a
+\texttt{stmt.executeUpdate()} è racchiusa in un \texttt{try-with-resources} che
+chiude automaticamente il \texttt{PreparedStatement} al termine, mentre
+l'eventuale \texttt{SQLException} viene catturata e rilasciata come
+\texttt{DAOException} con un messaggio descrittivo e la causa originale
+incapsulata nel campo \texttt{cause}:
+
+\begin{lstlisting}[language=Java, caption={Traduzione di SQLException in DAOException in UserDAO.save()}]
+public User save(User user) {
+    String sql = "INSERT INTO users (email, full_name, password_hash) "
+               + "VALUES (?, ?, ?)";
+    try (PreparedStatement stmt = connection.prepareStatement(
+            sql, Statement.RETURN_GENERATED_KEYS)) {
+
+        stmt.setString(1, user.getEmail());
+        stmt.setString(2, user.getFullName());
+        stmt.setString(3, user.getPasswordHash());
+
+        int affectedRows = stmt.executeUpdate();
+        if (affectedRows == 0) {
+            throw new DAOException("Creating user failed", null);
+        }
+
+        try (ResultSet keys = stmt.getGeneratedKeys()) {
+            if (keys.next()) {
+                Long userId = keys.getLong(1);
+                return new User(userId, user.getEmail(),
+                                user.getFullName(), user.getPasswordHash());
+            } else {
+                throw new DAOException("No ID obtained for new user", null);
+            }
+        }
+    } catch (SQLException e) {
+        throw new DAOException("Error saving user", e);
+    }
+}
+\end{lstlisting}
+
+Oltre alla semplice conversione, alcuni DAO implementano logiche di 
+persistenza più avanzate. Il \texttt{BalanceDAO}, ad esempio, gestisce un caso 
+particolare: il metodo \texttt{save()} tenta prima un \texttt{INSERT} e, se riceve 
+un errore di constraint violation (indicato dallo SQL state \texttt{23505} per H2 
+o dall'error code \texttt{1062} per MySQL), interpreta l'eccezione e si comporta 
+come un \textit{upsert}, delegando automaticamente l'operazione a \texttt{update()}.
+
+\begin{lstlisting}[language=Java, caption={Logica di upsert in BalanceDAO.save()}]
+public Balance save(Balance balance) {
+    String sql = "INSERT INTO balances (membership_id, net_balance, last_updated) VALUES (?, ?, ?)";
+    try (PreparedStatement stmt = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+        stmt.setLong(1, balance.getMembership().getMembershipId());
+        stmt.setBigDecimal(2, balance.getNetBalance());
+        stmt.setTimestamp(3, Timestamp.valueOf(LocalDateTime.now()));
+            
+        int affectedRows = stmt.executeUpdate();
+        if (affectedRows == 0) {
+            throw new DAOException("Creating balance failed", null);
+        }
+            
+        try (ResultSet keys = stmt.getGeneratedKeys()) {
+            if (keys.next()) {
+                Long balanceId = keys.getLong(1);
+                balance.setBalanceId(balanceId);
+            }
+        }
+            
+        return balance;
+    } catch (SQLException e) {
+        if (e.getErrorCode() == 1062 || "23505".equals(e.getSQLState())) {
+            return update(balance);
+        }
+        throw new DAOException("Error saving balance", e);
+    }
+}
+\end{lstlisting}
+
+Questo meccanismo semplifica la logica del Service Layer, che può invocare
+\texttt{balanceDAO.save()} senza preoccuparsi se il record esista già o meno, 
+delegando al DAO la responsabilità di eseguire l'operazione corretta.
 
 \subsection{Service Layer}
 Il Service Layer funge da collante tra la logica di business pura (Domain) e l'accesso ai dati (DAO).
