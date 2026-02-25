@@ -60,7 +60,7 @@ if (payer.equals(receiver)) {
 \end{lstlisting}
 
 \subsubsection{Lista di Observer non persistita e wiring a runtime}
-
+\label{sec:observer_wiring}
 La classe astratta \texttt{Subject} mantiene la lista degli Observer come campo
 d'istanza ordinario, senza alcuna marcatura speciale nel codice Java. L'assenza
 di persistenza di questo campo è una conseguenza architettonica deliberata: il
@@ -471,18 +471,18 @@ try {
 Il pattern Observer viene utilizzato per fare in modo che determinati eventi aggiornino in automatico altre entità. 
 Le classi Group, Expense e Settlement fungono da \textbf{Subject}, mentre la classe Membership agisce come \textbf{Observer}.
 
-All'interno della classe astratta Subject, la lista degli Observer è dichiarata come \texttt{transient},
-ovvero non viene salvata all'interno del database. Di conseguenza, quando un'entità come una Expense 
-viene letta dal database, non sa chi siano i suoi Observer.
-È responsabilità esclusiva del Service Layer ricreare questi collegamenti al volo (operazione definita appunto "wiring").
-Dunque, quando deve eseguire un'operazione che scaturirà un evento (es./ creazione di una nuova spesa), 
+All'interno della classe astratta \texttt{Subject}, la lista degli Observer 
+non viene persistita nel database (come discusso nella Sezione~\ref{sec:observer_wiring}).
+Di conseguenza, quando un'entità come una \texttt{Expense} viene letta dal database, non sa chi siano i suoi Observer,
+è responsabilità esclusiva del Service Layer ricreare questi collegamenti al volo (operazione definita appunto "wiring").
+Dunque, quando deve eseguire un'operazione che scaturirà un evento (es.\ creazione di una nuova spesa), 
 il Service esegue questi passaggi precisi:
 \begin{enumerate}
     \item Interroga il database tramite i DAO per ottenere l'oggetto principale (ad esempio l'Expense).
     \item Carica tutte le entità Observer correlate (tutte le Membership coinvolte).
-    \item Effettua il wiring, ovvero collega manualmente gli oggetti in memoria chiamando il metodo \texttt{attach()} sul Subject per ogni Observer trovato (es.\ texttt{expense.attach(membership})).
+    \item Effettua il wiring, ovvero collega manualmente gli oggetti in memoria chiamando il metodo \texttt{attach()} sul Subject per ogni Observer trovato (es.\ texttt{expense.attach(membership)}).
     \item Esegue la modifica richiesta. A questo punto, il Subject invoca internamente \texttt{notifyObservers()}; le Membership collegate ricevono la notifica in tempo reale e aggiornano i propri saldi.
-    \item Una volta che gli Observer hanno aggiornato il loro stato in memoria, il Service utilizza i DAO appropriati (es./ BalanceDAO) per salvare le modifiche definitive sul database.
+    \item Una volta che gli Observer hanno aggiornato il loro stato in memoria, il Service utilizza i DAO appropriati (es.\ BalanceDAO) per salvare le modifiche definitive sul database.
 \end{enumerate}
 
 \begin{lstlisting}[language=Java, caption={Implementazione del Wiring dinamico in ExpenseService}]

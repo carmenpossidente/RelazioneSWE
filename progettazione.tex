@@ -137,7 +137,7 @@ L'accesso ai dati è organizzato secondo il pattern Data Access Object (DAO), ch
     \item \textbf{Concrete DAOs}
     
     Per ciascuna entità principale del dominio è previsto un DAO dedicato (\texttt{UserDAO}, \texttt{GroupDAO}, \texttt{MembershipDAO}, \texttt{ExpenseDAO}, \texttt{BalanceDAO}, \texttt{SettlementDAO}). Ogni DAO espone metodi per il salvataggio, l'aggiornamento e il recupero delle entità. 
-    Come evidenziato nel diagramma (Figura \ref{fig:classdiagramORM}), i DAO includono metodi specifici per il dominio, quali \texttt{findByInviteCode} in \texttt{GroupDAO }o \texttt{findByGroup} in \texttt{ExpenseDAO} per recuperare le spese di un contesto specifico.
+    Come evidenziato nel diagramma (Figura \ref{fig:classdiagramORM}), i DAO includono metodi specifici per il dominio, quali \texttt{findByInviteCode} in \texttt{GroupDAO} o \texttt{findByGroup} in \texttt{ExpenseDAO} per recuperare le spese di un contesto specifico.
 
     I DAO hanno la responsabilità architetturale di istanziare gli oggetti del Domain Model (\texttt{User, Group,} ecc.), mappando i risultati delle query (\texttt{ResultSet}) in oggetti Java utilizzabili dai layer superiori.
 \end{enumerate}

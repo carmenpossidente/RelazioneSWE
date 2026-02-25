@@ -54,9 +54,207 @@ void canBeRemoved_reflectsPendingDebts() {
 \end{lstlisting}
     
 \end{itemize}
-    
 
 \subsection{Test di Integrazione (Grey-Box)}
+
+I test di integrazione verificano il corretto funzionamento dell'interazione tra 
+\textbf{Service Layer}, \textbf{DAO Layer} e \textbf{Database reale}, 
+testando Use Case completi con componenti autentici, senza l'ausilio di mock 
+per il livello di persistenza.
+% -------------------------------------------------------
+\subsubsection{BaseIntegrationTest: Classe Astratta}
+
+Tutti i test di integrazione estendono BaseIntegrationTest. Questa classe
+si occupa di inizializzare la connessione al database H2 in-memory, istanziare
+tutti i DAO reali e pulire l’intero schema relazionale prima di ogni test tramite
+\texttt{@BeforeEach}
+
+\begin{lstlisting}[language=Java, caption={Setup e pulizia del database in BaseIntegrationTest}]
+@BeforeEach
+void setUp() throws Exception {
+    connection = ConnectionManager.getInstance().getConnection();
+    userDAO = new UserDAO();
+    groupDAO = new GroupDAO();
+    membershipDAO = new MembershipDAO(userDAO, groupDAO);
+    balanceDAO = new BalanceDAO();
+    expenseDAO = new ExpenseDAO(groupDAO, membershipDAO);
+    settlementDAO = new SettlementDAO(groupDAO, membershipDAO);
+    cleanDatabase();
+}
+
+protected void cleanDatabase() throws SQLException {
+    try (Statement stmt = connection.createStatement()) {
+        stmt.execute("SET REFERENTIAL_INTEGRITY FALSE");
+        stmt.executeUpdate("DELETE FROM settlements");
+        stmt.executeUpdate("DELETE FROM balances");
+        stmt.executeUpdate("DELETE FROM expense_participants");
+        stmt.executeUpdate("DELETE FROM expenses");
+        stmt.executeUpdate("DELETE FROM memberships");
+        stmt.executeUpdate("DELETE FROM groups");
+        stmt.executeUpdate("DELETE FROM users");
+        stmt.execute("SET REFERENTIAL_INTEGRITY TRUE");
+    }
+}
+\end{lstlisting}
+
+Questo approccio garantisce che ogni test parta da uno stato noto e
+controllato, eliminando il rischio di \textit{flaky test} causati da dati residui di
+esecuzioni precedenti. La disabilitazione temporanea dei vincoli referenziali tramite 
+\texttt{SET REFERENTIAL\_INTEGRITY FALSE} consente la pulizia delle tabelle 
+nell'ordine desiderato, garantendo l'\textbf{isolamento tra test} e 
+prevenendo \textit{flaky test} causati da dati residui.
+
+% -------------------------------------------------------
+% -------------------------------------------------------
+\subsubsection{UserServiceTest\_UC1\_UC2 (Autenticazione)}
+\label{test:uc1_uc2}
+
+La classe collauda i flussi di registrazione e accesso al sistema. Il basic flow di UC1 è verificato dal test \texttt{UC1\_signUp\_withValidData\_createsUser}
+\phantomsection\label{test:uc1_signup}, che controlla la corretta persistenza dell'utente. Gli alternative flow coprono: email duplicata\phantomsection\label{test:uc1_duplicate_email}, formato email non valido\phantomsection\label{test:uc1_invalid_input}, login con email inesistente\phantomsection\label{test:uc2_invalid_email} e login con password errata\phantomsection\label{test:uc2_wrong_password}.
+
+A livello di integrazione viene inoltre verificata la sicurezza della persistenza. Mentre la validazione dei dati avviene a livello di dominio, qui si verifica che l'algoritmo di hashing venga effettivamente applicato prima del salvataggio nel database. Accedendo ai record bypassando deliberatamente la logica applicativa, si garantisce che le credenziali non siano mai archiviate in chiaro.
+
+\begin{lstlisting}[language=Java, caption={Verifica della sicurezza della persistenza bypassando il Service}, label=test:uc1_hash]
+@Test
+void UC1_signUp_passwordIsHashed() {
+    String plainPassword = "mySecretPassword123";
+    User user = userService.signUp("secure@test.com", plainPassword, "Secure User");
+
+    // Accesso diretto al DB per verificare lo stato reale dei dati
+    User fromDB = userDAO.findById(user.getUserId()).orElseThrow();
+
+    assertNotEquals(plainPassword, fromDB.getPasswordHash());
+    assertNotNull(fromDB.getPasswordHash());
+    assertFalse(fromDB.getPasswordHash().isEmpty());
+}
+\end{lstlisting}
+
+% -------------------------------------------------------
+\subsubsection{GroupServiceTest (Configurazione e Gestione Membri)}
+\label{test:group}
+
+I test di gruppo sono distribuiti in due classi distinte per area funzionale.
+\begin{itemize}
+    \item \textbf{\texttt{GroupServiceTest\_UC12}}\phantomsection\label{test:uc3_uc4_uc12} collauda la configurazione strutturale e il rispetto dei vincoli di sicurezza relazionali. Vengono esercitate la creazione del gruppo (\textbf{UC3})\phantomsection\label{test:uc3_create}, il join tramite codice (\textbf{UC4})\phantomsection\label{test:uc4_join} e l'aggiornamento atomico delle impostazioni (\textbf{UC12}). Il livello di integrazione assicura che un membro non-admin non possa forzare aggiornamenti sul database, verificando il corretto sollevamento della \texttt{UnauthorizedException}\phantomsection\label{test:uc12_unauthorized}.
+
+    \item \textbf{\texttt{GroupServiceTest\_UC10}}\phantomsection\label{test:uc9_uc10} si concentra sull'amministrazione dei membri. In questo contesto, le regole di business (già validate isolatamente nei test strutturali) vengono collaudate all'interno del flusso transazionale. Ad esempio, il vincolo che impedisce la rimozione di un membro con debiti pendenti viene qui esercitato per confermare che il \texttt{GroupService} interrompa l'operazione e prevenga modifiche indesiderate alle tabelle relazionali, applicando la regola indipendentemente dal ruolo del richiedente.
+\end{itemize}
+
+\begin{lstlisting}[language=Java, caption={Verifica dell'integrità transazionale sulla rimozione membri}, label=test:uc10_remove_debt]
+@Test
+void UC10_removeMember_withDebt_shouldThrowBusinessException() {
+    DomainException exception = assertThrows(DomainException.class, () -> {
+        groupService.removeMember(groupId, debtorMembershipId, adminMembershipId);
+    });
+
+    // Si verifica che il Service abbia bloccato l'aggiornamento su DB
+    assertTrue(isMemberActive(groupId, memberWithDebtId));
+}
+\end{lstlisting}
+
+Un membro con credito può invece essere rimosso, garantendo che il credito rimanga storicizzato nel sistema\phantomsection\label{test:uc10_remove_credit}.
+
+% -------------------------------------------------------
+\subsubsection{ExpenseServiceTest\_UC5\_UC11 (Gestione Spese)}
+\label{test:uc5_uc11}
+
+Questa suite valida la corretta propagazione degli eventi tramite il Pattern Observer all'interno del contesto transazionale.
+A differenza dei test unitari, qui si verifica la capacità del \texttt{Service Layer} di effettuare il \textit{wiring dinamico}, ricollegando correttamente in memoria le entità lette dal database.
+
+L'inserimento di una nuova spesa (\textbf{UC5}) deve innescare l'aggiornamento a cascata dei saldi\phantomsection\label{test:uc5_observer}, garantendo matematicamente a transazione conclusa il \textbf{vincolo di sistema chiuso}: la somma algebrica di tutti i balance estratti dal database deve essere pari a zero\phantomsection\label{test:uc5_balances}. Analogamente, per le \textbf{UC11}\phantomsection\label{test:uc11_edit}, si verifica che la \textbf{modifica dell'importo} inneschi un ricalcolo coerente e che la \textbf{cancellazione} (\textit{soft delete})\phantomsection\label{test:uc11_delete} istruisca gli Observer ad annullare i saldi riportandoli allo stato precedente.
+
+\begin{lstlisting}[language=Java, caption={Collaudo del wiring dinamico e dell'aggiornamento saldi a cascata}, label=test:uc5_balances]
+@Test
+void UC5_addExpense_updatesBalancesAutomatically() {
+    expenseService.addExpense(group.getGroupId(),
+        aliceMembership.getMembershipId(), new BigDecimal("100.00"),
+        "Dinner", Category.FOOD,
+        List.of(aliceMembership.getMembershipId(), bobMembership.getMembershipId()));
+
+    Balance aliceBalance = balanceDAO.findByMembershipId(aliceMembership.getMembershipId()).orElseThrow();
+    Balance bobBalance = balanceDAO.findByMembershipId(bobMembership.getMembershipId()).orElseThrow();
+
+    // Verifica dell'azione degli Observer post-persistenza
+    assertEquals(new BigDecimal("50.00"), aliceBalance.getAmount());
+    assertEquals(new BigDecimal("-50.00"), bobBalance.getAmount());
+
+    // Controllo del vincolo di sistema chiuso
+    BigDecimal total = aliceBalance.getAmount().add(bobBalance.getAmount());
+    assertEquals(BigDecimal.ZERO.setScale(2), total.setScale(2));
+}
+\end{lstlisting}
+
+% -------------------------------------------------------
+\subsubsection{BalanceServiceTest\_UC6\_UC8 (Saldi e Rimborsi)}
+\label{test:uc6_uc8}
+
+In questa classe, oltre a validare l'output dell'algoritmo di minimizzazione dei debiti (\texttt{MinTransactionsStrategy}) su un set di dati persistito reale (\textbf{UC6})\phantomsection\label{test:uc6_balances}, l'attenzione è posta sulle transizioni di stato del database durante i rimborsi (\textbf{UC8})\phantomsection\label{test:uc8_settle}.
+
+Viene esaminato in modo rigoroso il comportamento del sistema di fronte all'annullamento di un pagamento prima della sua conferma definitiva. Il test dimostra che, interrompendo il flusso, il database mantiene i \texttt{Balance} intatti e aggiorna unicamente lo stato della riga \texttt{Settlement} in \texttt{REJECTED}, confermando la corretta applicazione della regola architetturale della "doppia conferma".
+
+\begin{lstlisting}[language=Java, caption={Verifica della consistenza del database all'annullamento di un rimborso}, label=test:uc8_cancel]
+@Test
+void UC8_cancelSettlement_beforeConfirmation_shouldWork() throws Exception {
+    Settlement settlement = settlementService.createSettlement(
+        groupId, membershipId1, membershipId3, new BigDecimal("20.00"));
+
+    settlementService.cancelSettlement(settlement.getSettlementId(), membershipId1);
+
+    // Si garantisce che non vi siano state scritture accidentali sui saldi
+    assertEquals(0, new BigDecimal("-50.00").compareTo(getBalance(membershipId1)));
+    assertEquals(0, new BigDecimal("80.00").compareTo(getBalance(membershipId3)));
+
+    Settlement fromDB = settlementDAO.findById(settlement.getSettlementId()).orElseThrow();
+    assertEquals(PaymentStatus.REJECTED, fromDB.getStatus());
+}
+\end{lstlisting}
+
+\begin{table}[H]
+    \centering
+    \footnotesize
+    \renewcommand{\arraystretch}{1.2} % Aumenta lo spazio verticale tra le righe per maggiore respiro
+    \begin{tabularx}{\textwidth}{@{} l l X @{}}
+        \toprule
+        \textbf{Use Case} & \textbf{Flow} & \textbf{Test} \\
+        \midrule
+        \textbf{UC1 Sign Up} & Basic Flow & Registrazione con dati validi, hashing password \\
+        & Alternative 5a & Email duplicata \\
+        & Alternative 5b & Email/password non validi, nome vuoto \\
+        \midrule
+        \textbf{UC2 Login} & Basic Flow & Login con credenziali valide \\
+        & Alternative 4a & Email inesistente, password errata \\
+        \midrule
+        \textbf{UC3 Create Group} & Basic Flow & Creazione gruppo, assegnazione ruolo ADMIN \\
+        \midrule
+        \textbf{UC4 Join Group} & Basic Flow & Join con codice invito, stato WAITING\_ACCEPTANCE \\
+        & Alternative & Codice invito non valido \\
+        \midrule
+        \textbf{UC5 Add Expense} & Basic Flow & Creazione spesa, aggiornamento saldi (Observer) \\
+        & Alternative 4a & Importo negativo/zero \\
+        & Alternative 5a & Descrizione vuota \\
+        \midrule
+        \textbf{UC6 View Balances} & Basic Flow & Saldi corretti, MinTransactionsStrategy, isGroupSettled, getDebtors, getCreditors \\
+        \midrule
+        \textbf{UC8 Settle Debt} & Basic Flow & Settlement completo e parziale \\
+        & Alternative 4a & Importo superiore al debito \\
+        & Alternative & Membro senza debiti, cancellazione settlement \\
+        \midrule
+        \textbf{UC9 Invite Member} & Basic Flow & Generazione codice invito \\
+        & Alternative & Generazione da parte di non-admin \\
+        \midrule
+        \textbf{UC10 Manage Members} & Basic Flow & Rimozione membro (saldo zero, in credito) \\
+        & Alternative & Rimozione membro con debiti, non-admin, admin con debiti, approvazione membership \\
+        \midrule
+        \textbf{UC11 Edit/Delete} & Basic Flow & Edit/Delete + ricalcolo e annullamento saldi \\
+        & Alternative 2a/2b & Autorizzazioni (solo creator) \\
+        \midrule
+        \textbf{UC12 Configure Group} & Basic Flow & Aggiornamento nome, descrizione, valuta \\
+        & Alternative & Modifica da parte di non-admin \\
+        \bottomrule
+    \end{tabularx}
+    \caption{Copertura Use Case e Alternative Flows nei test di integrazione}
+    \label{tab:coverage_integration}
+\end{table}
 
 \subsection{Test Funzionali (Black-Box)}
 \label{sec:testing_e2e}

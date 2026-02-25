@@ -30,8 +30,10 @@ e le principali funzionalità offerte dall'applicazione per ciascun ruolo.
 \end{figure}
 
 \newpage
+
 \subsection{Use Case Templates}
-Per ciascun caso d’uso identificato nel diagramma precedente,
+
+Per ciascun caso d'uso identificato nel diagramma precedente,
 sono stati definiti i relativi template descrittivi.
 Ogni template specifica attore, pre-condizioni, flusso principale
 e flussi alternativi, fornendo una descrizione strutturata
@@ -66,13 +68,13 @@ del comportamento atteso del sistema.
             \end{itemize}
             \item Il sistema verifica la validità dei dati (formato email, corrispondenza password).
             \item Il sistema registra il nuovo utente nel database.
-            \item Il sistema mostra un messaggio di conferma e reindirizza alla pagina di login (Test \#1).
+            \item Il sistema mostra un messaggio di conferma e reindirizza alla pagina di login (\hyperref[test:uc1_signup]{\textit{Test}}).
         \end{enumerate} \\
         \hline
         \textbf{Alternative Flow} & 
         \begin{enumerate}[label=5\alph*., leftmargin=*, nosep, topsep=3pt]
-            \item Se l'email è già registrata, il sistema mostra un messaggio di errore ``Account already exists''.
-            \item Se i campi obbligatori non sono compilati o le password non coincidono, il sistema richiede la correzione.
+            \item Se l'email è già registrata, il sistema mostra un messaggio di errore ``Account already exists'' (\hyperref[test:uc1_duplicate_email]{\textit{Test}}).
+            \item Se i campi obbligatori non sono compilati o le password non coincidono, il sistema richiede la correzione (\hyperref[test:uc1_invalid_input]{\textit{Test}}).
         \end{enumerate} \\
         \hline
     \end{tabularx}
@@ -105,7 +107,8 @@ del comportamento atteso del sistema.
         \hline
         \textbf{Alternative Flow} & 
         \begin{enumerate}[label=4\alph*., leftmargin=*, nosep, topsep=3pt]
-            \item Se l'email o la password non sono corrette, il sistema mostra un messaggio ``Invalid credentials'' e permette un nuovo tentativo.
+            \item Se l'email non è registrata, il sistema mostra un messaggio di errore (\hyperref[test:uc2_invalid_email]{\textit{Test}}). 
+            Se la password non è corretta, mostra ``Invalid credentials'' e permette un nuovo tentativo (\hyperref[test:uc2_wrong_password]{\textit{Test}}).
             \item Se l'utente dimentica la password, può cliccare su ``Forgot password?'' per avviare la procedura di recupero.
         \end{enumerate} \\
         \hline
@@ -130,7 +133,7 @@ del comportamento atteso del sistema.
         \hline
         \textbf{Basic Flow} & 
         \begin{enumerate}[leftmargin=*, nosep, topsep=3pt]
-            \item L'utente accede alla dashboard personale (\hyperref[fig:dashboard]{\textbf{vedi Mockup \#1}}).
+            \item L'utente accede alla dashboard personale (\hyperref[fig:dashboard]{\textit{vedi Mockup \#1}}).
             \item Clicca su ``Create New Group''.
             \item Il sistema apre la pagina di configurazione gruppo.
             \item L'utente inserisce i dettagli del gruppo:
@@ -140,7 +143,7 @@ del comportamento atteso del sistema.
                 \item Currency (selezionabile da dropdown)
             \end{itemize}
             \item Clicca su ``Create''.
-            \item Il sistema registra il nuovo gruppo, imposta l'utente come Admin, e apre la pagina del gruppo creato.
+            \item Il sistema registra il nuovo gruppo, imposta l'utente come Admin, e apre la pagina del gruppo creato (\hyperref[test:uc3_create]{\textit{Test}}).
         \end{enumerate} \\
         \hline
         \textbf{Alternative Flow} & 
@@ -170,16 +173,16 @@ del comportamento atteso del sistema.
         \hline
         \textbf{Basic Flow} & 
         \begin{enumerate}[leftmargin=*, nosep, topsep=3pt]
-            \item L'utente accede alla sezione ``Join Group'' dalla Dashboard (\hyperref[fig:dashboard]{\textbf{vedi Mockup \#1}}).
+            \item L'utente accede alla sezione ``Join Group'' dalla Dashboard (\hyperref[fig:dashboard]{\textit{vedi Mockup \#1}}).
             \item Inserisce il codice di invito oppure clicca direttamente sul link ricevuto.
             \item Il sistema verifica la validità del codice e l'esistenza del gruppo.
-            \item Se valido, il sistema aggiunge l'utente come Member del gruppo.
-            \item Il sistema mostra un messaggio di conferma e reindirizza alla pagina del gruppo (\hyperref[fig:group_details]{\textbf{vedi Mockup \#2}}).
+            \item Se valido, il sistema aggiunge l'utente come Member del gruppo in stato \texttt{WAITING\_ACCEPTANCE} (\hyperref[test:uc4_join]{\textit{Test}}).
+            \item Il sistema mostra un messaggio di conferma e reindirizza alla pagina del gruppo (\hyperref[fig:group_details]{\textit{vedi Mockup \#2}}).
         \end{enumerate} \\
         \hline
         \textbf{Alternative Flow} & 
         \begin{enumerate}[label=3\alph*., leftmargin=*, nosep, topsep=3pt]
-            \item Se il codice è errato o scaduto, il sistema mostra ``Invalid or expired invitation''.
+            \item Se il codice è errato o scaduto, il sistema mostra ``Invalid or expired invitation'' (\hyperref[test:uc4_invalid_code]{\textit{Test}}).
             \item Se l'utente è già membro del gruppo, il sistema mostra ``You are already part of this group''.
         \end{enumerate} \\
         \hline
@@ -206,7 +209,7 @@ del comportamento atteso del sistema.
         \begin{enumerate}[leftmargin=*, nosep, topsep=3pt]
             \item Il membro accede alla pagina del gruppo.
             \item Clicca sul pulsante ``Add Expense'' in alto a destra.
-            \item Il sistema apre la finestra modale di inserimento (\hyperref[fig:add_expense]{\textbf{vedi Mockup \#3}}).
+            \item Il sistema apre la finestra modale di inserimento (\hyperref[fig:add_expense]{\textit{vedi Mockup \#3}}).
             \item Il membro inserisce i dettagli della spesa:
             \begin{itemize}[nosep, label={--}, topsep=2pt]
                 \item Description 
@@ -216,12 +219,12 @@ del comportamento atteso del sistema.
                 \item Split between (checkbox membri o ``Select all'')
             \end{itemize}
             \item Il sistema verifica la correttezza dei dati inseriti.
-            \item Il sistema registra la nuova spesa, aggiorna i saldi e chiude il modale tornando alla pagina del gruppo.
+            \item Il sistema registra la nuova spesa, aggiorna i saldi automaticamente tramite il Pattern Observer, e chiude il modale (\hyperref[test:uc5_balances]{\textit{Test}}).
         \end{enumerate} \\
         \hline
         \textbf{Alternative Flow} & 
         \begin{enumerate}[label=4\alph*., leftmargin=*, nosep, topsep=3pt]
-            \item Se l'importo non è valido o i campi obbligatori sono vuoti, il sistema mostra un messaggio di errore.
+            \item Se l'importo non è valido (negativo o zero), il sistema mostra un messaggio di errore (\hyperref[test:uc5_invalid_amount]{\textit{Test}}).
         \end{enumerate}
         \begin{enumerate}[label=5\alph*., leftmargin=*, nosep, topsep=3pt]
             \item Se i dati sono incompleti, il sistema richiede il completamento dei campi mancanti.
@@ -249,19 +252,19 @@ del comportamento atteso del sistema.
         \textbf{Basic Flow} & 
         \begin{enumerate}[leftmargin=*, nosep, topsep=3pt]
             \item Il membro accede alla pagina del gruppo.
-            \item Seleziona la sezione ``Balances'' (\hyperref[fig:balances]{\textbf{vedi Mockup \#4}}).
+            \item Seleziona la sezione ``Balances'' (\hyperref[fig:balances]{\textit{vedi Mockup \#4}}).
             \item Il sistema mostra:
             \begin{itemize}[nosep, label={--}, topsep=2pt]
                 \item Totale delle spese del gruppo
-                \item Saldo individuale di ciascun membro
-                \item Lista di debiti/crediti reciproci (``chi deve a chi'')
+                \item Saldo individuale di ciascun membro (\hyperref[test:uc6_balances]{\textit{Test}})
+                \item Lista di debiti/crediti reciproci ottimizzata da \texttt{MinTransactionsStrategy}
             \end{itemize}
             \item Il membro può visualizzare i dettagli delle transazioni passate.
         \end{enumerate} \\
         \hline
         \textbf{Alternative Flow} & 
         \begin{enumerate}[label=3\alph*., leftmargin=*, nosep, topsep=3pt]
-            \item Se non ci sono spese registrate, il sistema mostra ``No expenses yet''.
+            \item Se non ci sono spese registrate, il sistema mostra ``No expenses yet'' (\hyperref[test:uc6_settled]{\textit{Test}}).
         \end{enumerate} \\
         \hline
     \end{tabularx}
@@ -323,16 +326,17 @@ del comportamento atteso del sistema.
         \hline
         \textbf{Basic Flow} & 
         \begin{enumerate}[leftmargin=*, nosep, topsep=3pt]
-            \item Il membro accede alla sezione ``Balances'' (\hyperref[fig:balances]{\textbf{vedi Mockup \#4}}).
+            \item Il membro accede alla sezione ``Balances'' (\hyperref[fig:balances]{\textit{vedi Mockup \#4}}).
             \item Seleziona il debito da saldare.
             \item Il sistema mostra l'importo dovuto e chiede conferma del pagamento.
             \item Il membro conferma.
-            \item Il sistema registra il pagamento e aggiorna immediatamente i saldi mostrati nella pagina.
+            \item Il sistema registra il pagamento in stato \texttt{PENDING} e aggiorna i saldi solo alla conferma definitiva del creditore.
         \end{enumerate} \\
         \hline
         \textbf{Alternative Flow} & 
         \begin{enumerate}[label=4\alph*., leftmargin=*, nosep, topsep=3pt]
-            \item Se il membro annulla l'operazione, il sistema chiude la richiesta senza registrare il pagamento.
+            \item Se il membro annulla l'operazione, il sistema chiude la richiesta senza registrare il pagamento e i saldi rimangono invariati (\hyperref[test:uc8_cancel]{\textit{Test}}).
+            \item Se l'importo inserito supera il debito reale, il sistema blocca l'operazione (\hyperref[test:uc8_exceeds_debt]{\textit{Test}}).
         \end{enumerate} \\
         \hline
     \end{tabularx}
@@ -358,7 +362,7 @@ del comportamento atteso del sistema.
         \begin{enumerate}[leftmargin=*, nosep, topsep=3pt]
             \item L'Admin accede alla sezione ``Members Page'' del gruppo.
             \item Seleziona l'opzione ``Invite a new member''.
-            \item Il sistema genera un codice/link di invito univoco.
+            \item Il sistema genera un codice/link di invito univoco (\hyperref[test:uc9_invite]{\textit{Test}}).
             \item L'Admin copia o invia il link ai potenziali membri tramite canali esterni.
             \item Il sistema registra l'invito in stato ``Waiting for acceptance''.
             \item Quando l'utente destinatario utilizza il link, il sistema valida il codice e invia la richiesta di ingresso al gruppo.
@@ -367,10 +371,13 @@ del comportamento atteso del sistema.
         \hline
         \textbf{Alternative Flow} & 
         \begin{enumerate}[label=2\alph*., leftmargin=*, nosep, topsep=3pt]
-            \item Se esiste già un invito attivo per lo stesso utente, il sistema non genera un nuovo codice e mostra il messaggio ``The invitation has already been sent'' (Test \#).
+            \item Se esiste già un invito attivo per lo stesso utente, il sistema non genera un nuovo codice e mostra il messaggio ``The invitation has already been sent''.
         \end{enumerate}
         \begin{enumerate}[label=4\alph*., leftmargin=*, nosep, topsep=3pt]
-            \item Se il link scade o viene revocato dall'Admin, il sistema mostra ``The invitation has expired'' (Test \#).
+            \item Se il link scade o viene revocato dall'Admin, il sistema mostra ``The invitation has expired''.
+        \end{enumerate}
+        \begin{enumerate}[label=5\alph*., leftmargin=*, nosep, topsep=3pt]
+            \item Se un membro non-admin tenta di generare un codice invito, il sistema rifiuta l'operazione (\hyperref[test:uc9_nonadmin]{\textit{Test}}).
         \end{enumerate} \\
         \hline
     \end{tabularx}
@@ -386,7 +393,7 @@ del comportamento atteso del sistema.
         \hline
         \multicolumn{2}{|c|}{\textbf{UC10 -- Manage Existing Members}} \\
         \hline
-        \textbf{Attore} & Admin \\
+        \textbf{Attore} & Member (creatore della spesa) o Admin \\
         \hline
         \textbf{Livello} & User Goal \\
         \hline
@@ -408,8 +415,8 @@ del comportamento atteso del sistema.
         \hline
         \textbf{Alternative Flow} & 
         \begin{enumerate}[label=3\alph*., leftmargin=*, nosep, topsep=3pt]
-            \item Se l'Admin tenta di rimuovere un membro con debiti aperti, il sistema blocca l'operazione e mostra il messaggio ``The member cannot be removed'' (Test \#).
-            \item L'approvazione non va a buon fine per link scaduto: il sistema notifica errore ``The invitation is no longer valid'' (Test \#).
+            \item Se l'Admin tenta di rimuovere un membro con debiti aperti, il sistema blocca l'operazione e mostra il messaggio ``The member cannot be removed'' (\hyperref[test:uc10_remove_debt]{\textit{Test}}).
+            \item L'approvazione non va a buon fine per link scaduto: il sistema notifica errore ``The invitation is no longer valid''.
         \end{enumerate} \\
         \hline
     \end{tabularx}
@@ -429,20 +436,20 @@ del comportamento atteso del sistema.
         \hline
         \textbf{Livello} & User Goal \\
         \hline
-        \textbf{Pre-condizioni} & Esiste almeno una spesa registrata. \\
+        \textbf{Pre-condizioni} & Il membro è autenticato ed è il creatore della spesa, oppure è l'Admin del gruppo. \\ \\
         \hline
         \textbf{Basic Flow} & 
         \begin{enumerate}[leftmargin=*, nosep, topsep=3pt]
             \item L'Admin accede alla sezione ``Expense page''.
             \item Seleziona la spesa da modificare o eliminare.
             \item Il sistema valida la coerenza dei dati modificati.
-            \item Se confermata, il sistema aggiorna i saldi del gruppo e la cronologia.
+            \item Se confermata, il sistema aggiorna i saldi del gruppo tramite il Pattern Observer (\hyperref[test:uc11_edit]{\textit{Test}}) e, in caso di eliminazione, li annulla completamente (\hyperref[test:uc11_delete]{\textit{Test}}).
             \item Il sistema notifica tutti i membri del gruppo.
         \end{enumerate} \\
         \hline
         \textbf{Alternative Flow} & 
         \begin{enumerate}[label=2\alph*., leftmargin=*, nosep, topsep=3pt]
-            \item Tentativo di modifica su spesa già saldata: il sistema mostra un messaggio di blocco.
+            \item Tentativo di modifica o eliminazione da parte di un membro non creatore della spesa: il sistema blocca l'operazione (\hyperref[test:uc11_unauthorized]{\textit{Test}}).
             \item L'Admin annulla l'operazione: nessuna modifica viene salvata.
         \end{enumerate} \\
         \hline
@@ -484,7 +491,8 @@ del comportamento atteso del sistema.
         \hline
         \textbf{Alternative Flow} & 
         \begin{enumerate}[label=3\alph*., leftmargin=*, nosep, topsep=3pt]
-            \item Errore di validazione (es.\ valuta non supportata).
+            \item Errore di validazione (es.\ valuta non supportata o nome vuoto).
+            \item Se un membro non-admin tenta di modificare le impostazioni, il sistema rifiuta l'operazione (\hyperref[test:uc12_unauthorized]{\textit{Test}}).
             \item L'Admin annulla l'operazione: nessuna modifica viene applicata.
         \end{enumerate} \\
         \hline
@@ -494,6 +502,7 @@ del comportamento atteso del sistema.
 \end{table}
 
 \clearpage
+
 \subsection{Mockups}
 I mockup illustrano una possibile rappresentazione grafica 
 dell’interfaccia utente, coerente con i requisiti funzionali definiti. 
@@ -542,12 +551,12 @@ Il diagramma di navigazione descrive il flusso tra le diverse
 pagine dell’applicazione, evidenziando le transizioni possibili
 in base alle azioni dell’utente. 
 
-Come evidenziato nel diagramma (\textbf{Figura \ref{fig:pagenavigationdiagram}}), alcune pagine e azioni, 
-come la gestione delle impostazioni di gruppo, la modifica/eliminazione delle spese e la gestione dei membri o inviti, 
-sono riservate \textbf{solo} agli amministratori del gruppo.
+Come evidenziato nel diagramma (Figura \ref{fig:pagenavigationdiagram}), alcune pagine e azioni, 
+come la gestione delle impostazioni di gruppo e la gestione dei membri o inviti, 
+sono riservate \textbf{solo} agli amministratori del gruppo. 
+La modifica o eliminazione delle spese, invece, è permessa sia agli amministratori che ai membri che hanno originariamente creato la spesa.
 Questa restrizione visiva e funzionale garantisce che le operazioni critiche o potenzialmente distruttive non siano esposte ai membri standard, 
 migliorando la sicurezza e prevenendo azioni accidentali.
-
 
 \begin{figure}[htbp]
     \centering
