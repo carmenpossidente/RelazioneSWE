@@ -68,11 +68,11 @@ Il diagramma delle classi del Domain Model descrive la logica di business alla b
 Come si è accennato, le classi sono state suddivise in 3 sotto-package all'interno del package Domain Model:
 \begin{enumerate}
     \item \textbf{Events (Pattern Observer)}
-    Questo package implementa il pattern Observer per gestire la propagazione dei cambiamenti di stato all'interno del Domain Model, assicurando che quando avviene un'azione (es. una spesa viene creata), le altre entità interessate (es. i saldi dei membri) vengano aggiornate automaticamente.
+    Questo package implementa il pattern Observer per gestire la propagazione dei cambiamenti di stato all'interno del Domain Model, assicurando che quando avviene un’azione (es. una spesa viene creata), le entità interessate ricevano una notifica per reagire di conseguenza (es. simulando l'invio di un avviso o una email all'utente interessato).
     \begin{itemize}
-        \item \textbf{Subject (Classe Astratta)}: Definisce il contratto per le entità che possono generare eventi (come Group, Expense, Settlement). Gestisce una lista transient di observer e fornisce metodi per l'aggancio (attach) e la notifica (notifyObservers).
+        \item \textbf{Subject (Classe Astratta)}: Definisce il contratto per le entità che possono generare eventi (come Group, Expense, Settlement). Gestisce una lista di observer mantenuta solo in memoria (non persistita a database) e fornisce metodi per l’aggancio (attach) e la notifica (notifyObservers).
         
-        \item \textbf{Observer (Interfaccia)}: Definita per le entità che devono reagire ai cambiamenti. Nel sistema, la classe Membership implementa questa interfaccia per aggiornare il proprio Balance in risposta agli eventi di dominio.
+        \item \textbf{Observer (Interfaccia)}: Definita per le entità che devono reagire ai cambiamenti. Nel sistema, la classe Membership implementa questa interfaccia per intercettare gli eventi di dominio e gestire le notifiche (es. loggando l'invio simulato di una comunicazione all'utente), delegando invece gli aggiornamenti contabili critici (come i Balance) al livello Service per garantirne la transazionalità.
         
         \item \textbf{DomainEvent (Value Object)}: Incapsula i dettagli di un cambiamento di stato, inclusi l'identificativo della sorgente (sourceId), il timestamp, l'utente che ha scatenato l'azione (triggeredBy) e un payload flessibile sotto forma di mappa.
         
@@ -86,7 +86,7 @@ Come si è accennato, le classi sono state suddivise in 3 sotto-package all'inte
         \item \textbf{Group (Entity, Subject)}: L'entità centrale che aggrega membri, spese e saldi. Gestisce i codici di invito e lo stato di attività.
         Estende Subject per notificare modifiche alla sua struttura.
         
-        \item Membership (Entity, Observer): Classe associativa che lega un User e un Group. Definisce il ruolo (ADMIN, MEMBER) e lo stato (ACTIVE, WAITING\_ACCEPTANCE, REMOVED). Implementa Observer per ricalcolare i debiti/crediti ogni volta che una spesa viene aggiunta o modificata nel gruppo di appartenenza.
+        \item \textbf{Membership (Entity, Observer)}: Classe associativa che lega un User e un Group. Definisce il ruolo (ADMIN, MEMBER) e lo stato (ACTIVE, WAITING\_ACCEPTANCE, REMOVED). Implementa Observer per monitorare i cambiamenti nel gruppo di appartenenza, limitandosi a innescare le opportune notifiche per l'utente associato.
     \end{itemize}
     
     \item \textbf{Accounting (Contabilità)}
@@ -110,10 +110,9 @@ Come si è accennato, le classi sono state suddivise in 3 sotto-package all'inte
 \paragraph{Relazioni e Vincoli di Integrità}
 Il diagramma evidenzia legami strutturali forti che guidano la persistenza e il ciclo di vita degli oggetti:
 \begin{itemize}
-    \item \textbf{Composizione}: Group esercita una composizione (1:N) su Membership, Expense e Settlement, indicando che queste entità non hanno ragione di esistere al di fuori del contesto del gruppo.
-    Ogni Membership ha esattamente un Balance associato (1:1).
+    \item \textbf{Composizione}: Group esercita una composizione (1:N) su Membership, Expense e Settlement, indicando che queste entità non hanno ragione di esistere al di fuori del contesto del gruppo. Analogamente, Expense esercita una composizione (1:N) su ExpenseParticipant: questo vincolo indica che i dettagli della partecipazione (come la quota individuale shareAmount) sono parti integranti della spesa stessa e non possono esistere indipendentemente da essa.
     
-    \item \textbf{Associazioni}: Un User può avere più Membership (partecipare a più gruppi), mentre una Expense ha un singolo payer (Membership) ma molti participants. Le spese e i pareggi puntano a istanze di Membership per identificare gli attori finanziari coinvolti, garantendo l'integrità referenziale all'interno del database.
+    \item \textbf{Associazioni}: Un User può possedere più Membership, permettendogli di partecipare a diversi gruppi mantenendo profili e ruoli distinti. Ogni Membership ha esattamente un Balance associato (1:1). Le spese e i pareggi puntano a specifiche istanze di Membership (per i ruoli di payer, creator o beneficiary), questo garantisce la tracciabilità e la coerenza del modello di business, identificando univocamente i soggetti coinvolti nelle transazioni all'interno del gruppo.
 \end{itemize}
 
 \subsubsection{ORM}
